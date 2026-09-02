@@ -1,4 +1,4 @@
-# Arena Forge
+# Ring Tactics
 
 Turn-based wrestling tactics built with React, Vite, Express, Socket.IO, and PostgreSQL.
 

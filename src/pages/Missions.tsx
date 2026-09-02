@@ -16,7 +16,7 @@ export function MissionsPage() {
         <div className="max-w-5xl mx-auto px-4 py-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-px-dim text-[9px] font-bold uppercase tracking-widest mb-1"
-               style={{ fontFamily: 'monospace' }}>Slam Arena</p>
+               style={{ fontFamily: 'monospace' }}>Ring Tactics</p>
             <h1 className="text-2xl font-bold uppercase tracking-widest">Missions</h1>
           </div>
           {progress && (

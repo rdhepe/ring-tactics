@@ -26,7 +26,7 @@ export function CharactersPage() {
       <div className="arena-page-header border-b-2 border-px-border bg-px-panel">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-end gap-4 flex-wrap">
           <div>
-            <p className="text-px-dim text-[9px] uppercase tracking-widest font-bold mb-0.5" style={{ fontFamily: 'monospace' }}>Slam Arena</p>
+            <p className="text-px-dim text-[9px] uppercase tracking-widest font-bold mb-0.5" style={{ fontFamily: 'monospace' }}>Ring Tactics</p>
             <h1 className="text-2xl font-bold uppercase tracking-widest text-px-text leading-none">Roster</h1>
           </div>
           <span className="text-px-muted text-sm ml-auto">{filtered.length} / {ALL_CHARACTERS.length}</span>

@@ -21,7 +21,7 @@ function MatchMenu({ onSelect }: { onSelect: (mode: GameMode) => void }) {
       <div className="arena-page-header" style={{ background: '#141726', borderBottom: '4px solid #c42b2b' }}>
         <div className="max-w-6xl mx-auto px-4 py-5">
           <p className="text-px-dim text-[9px] font-bold uppercase tracking-widest mb-1"
-             style={{ fontFamily: 'monospace' }}>Slam Arena</p>
+             style={{ fontFamily: 'monospace' }}>Ring Tactics</p>
           <h1 className="text-2xl font-bold uppercase tracking-widest">Select Match Type</h1>
         </div>
       </div>

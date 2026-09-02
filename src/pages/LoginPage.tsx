@@ -55,8 +55,8 @@ export function LoginPage() {
       <div className="arena-page-header" style={{ background: '#141726', borderBottom: '4px solid #c42b2b' }}>
         <div className="max-w-6xl mx-auto px-4 py-5 text-center">
           <p style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 18 }}>
-            <span style={{ color: '#ffd166' }}>SLAM</span>
-            <span style={{ color: '#e2e8ff' }}>ARENA</span>
+            <span style={{ color: '#ffd166' }}>RING</span>
+            <span style={{ color: '#e2e8ff' }}> TACTICS</span>
           </p>
         </div>
       </div>

@@ -20,11 +20,11 @@ export function HomePage() {
     <main className="event-home">
       <section className="event-hero" style={{ backgroundImage: `url(${arenaBackground})` }}>
         <div className="event-broadcast">
-          <span>SLAM NETWORK</span><b>LIVE</b><span>SEASON 01</span>
+          <span>RING TACTICS NETWORK</span><b>LIVE</b><span>SEASON 01</span>
         </div>
         <div className="event-hero-copy">
           <p className="event-kicker">The bell is about to ring</p>
-          <h1><em>SLAM</em> ARENA</h1>
+          <h1><em>RING</em> TACTICS</h1>
           <p>Build a three-wrestler stable. Call every move. Leave no one standing.</p>
           <div className="event-actions">
             <Link to="/battle" className="event-button event-button-primary">Enter The Ring</Link>

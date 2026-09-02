@@ -18,7 +18,7 @@ export function Navbar() {
       <div className="max-w-6xl mx-auto px-4 h-12 flex items-center gap-8">
         <Link to="/" className="tracking-widest uppercase shrink-0"
               style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 10 }}>
-          <span className="text-px-gold">SLAM</span><span className="text-px-text">ARENA</span>
+          <span className="text-px-gold">RING</span><span className="text-px-text"> TACTICS</span>
         </Link>
 
         <div className="flex gap-0.5">
