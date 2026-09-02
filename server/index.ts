@@ -1,6 +1,8 @@
 import 'dotenv/config'
 import express from 'express'
 import { createServer } from 'http'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Server, type Socket } from 'socket.io'
 import { randomBytes } from 'crypto'
 import argon2 from 'argon2'
@@ -33,7 +35,8 @@ const TURN_SECS = 60
 const isProduction = process.env.NODE_ENV === 'production'
 const SESSION_COOKIE = isProduction ? '__Host-arena_session' : 'arena_session'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
-const allowedOrigins = (process.env.APP_ORIGIN ?? 'http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5174')
+const railwayOrigin = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : ''
+const allowedOrigins = (process.env.APP_ORIGIN ?? `http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5174,${railwayOrigin}`)
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean)
@@ -276,6 +279,14 @@ app.get('/leaderboards', async (_req, res) => {
 app.get('/health', async (_req, res) => {
   await pool.query('SELECT 1')
   res.json({ status: 'ok' })
+})
+
+const serverDirectory = path.dirname(fileURLToPath(import.meta.url))
+const distDirectory = path.resolve(serverDirectory, '../dist')
+app.use(express.static(distDirectory, { index: false, maxAge: isProduction ? '1y' : 0 }))
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || !req.accepts('html')) { next(); return }
+  res.sendFile(path.join(distDirectory, 'index.html'))
 })
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

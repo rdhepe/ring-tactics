@@ -52,7 +52,6 @@ const TurnTimer = memo(function TurnTimer({ initialTime }: { initialTime: number
 export function PvpBattleArena({ onReset }: { onReset: () => void }) {
   // Granular selectors — each only re-renders this component when its own slice changes
   const serverState       = usePvpStore(s => s.battleState)
-  const pvpPhase          = usePvpStore(s => s.pvpPhase)
   const myTurn            = usePvpStore(s => s.myTurn)
   const opponentActing    = usePvpStore(s => s.opponentActing)
   const opponentUsername  = usePvpStore(s => s.opponentUsername)

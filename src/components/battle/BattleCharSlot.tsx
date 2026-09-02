@@ -22,7 +22,7 @@ interface BattleCharSlotProps {
   onClick: () => void
 }
 
-export function BattleCharSlot({ battleChar, side, selected, targeted, queuedSkillName, onClick }: BattleCharSlotProps) {
+export function BattleCharSlot({ battleChar, side: _side, selected, targeted, queuedSkillName, onClick }: BattleCharSlotProps) {
   const { character, hp, maxHp, isDead, activeEffects } = battleChar
   const rc = getRarityColor(character.rarity)
   const stunned = isStunned(battleChar)

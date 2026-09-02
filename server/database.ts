@@ -20,7 +20,7 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required')
 
 export const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined,
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
   max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,

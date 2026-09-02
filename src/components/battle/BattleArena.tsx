@@ -7,7 +7,7 @@ import { CharacterRow } from './CharacterRow'
 import type { IncomingQueued } from './CharacterRow'
 import { EnergyBar } from './EnergyBar'
 import type { BattleState, EnergyPool } from '../../types'
-import { isInvulnerable, isStunned, canAfford, spendEnergy } from '../../engine/battle'
+import { isInvulnerable, isStunned, spendEnergy } from '../../engine/battle'
 import { EnergyAllocModal } from './EnergyAllocModal'
 import { BattleField } from './BattleField'
 
@@ -340,17 +340,17 @@ export function BattleArena() {
   const aiChars     = state.ai.characters
 
   function getQueuedSkillId(charIdx: number) {
-    return state.playerQueue.find(q => q.characterIndex === charIdx)?.skillId
+    return state!.playerQueue.find(q => q.characterIndex === charIdx)?.skillId
   }
 
   /** Pool remaining for wildcard allocation: deducts this skill's fixed costs + all other queued costs. */
   function getAvailableForAlloc(charIdx: number, skillId: string): EnergyPool {
-    const pool = { ...state.player.energy }
+    const pool = { ...state!.player.energy }
     const skill = playerChars[charIdx]?.character.skills.find(s => s.id === skillId)
     if (skill) {
       for (const t of E_KEYS) pool[t] = Math.max(0, pool[t] - (skill.cost[t] ?? 0))
     }
-    for (const q of state.playerQueue) {
+    for (const q of state!.playerQueue) {
       if (q.characterIndex === charIdx) continue
       const qs = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
       if (!qs) continue
@@ -381,8 +381,8 @@ export function BattleArena() {
 
   /** Energy pool remaining after every OTHER character's queued skill cost is deducted. */
   function getEnergyForChar(charIdx: number): EnergyPool {
-    const remaining = { ...state.player.energy }
-    for (const q of state.playerQueue) {
+    const remaining = { ...state!.player.energy }
+    for (const q of state!.playerQueue) {
       if (q.characterIndex === charIdx) continue
       const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
       if (skill) spendEnergy(skill.cost, remaining)
@@ -391,7 +391,7 @@ export function BattleArena() {
   }
 
   function getIncomingQueued(aiSlot: number): IncomingQueued[] {
-    return state.playerQueue
+    return state!.playerQueue
       .filter(q => {
         if (q.targetTeam !== 'ai') return false
         const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
@@ -411,7 +411,7 @@ export function BattleArena() {
   }
 
   function getPlayerIncomingQueued(playerSlot: number): IncomingQueued[] {
-    return state.playerQueue
+    return state!.playerQueue
       .filter(q => {
         if (q.targetTeam !== 'player') return false
         const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)

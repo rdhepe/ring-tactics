@@ -34,7 +34,7 @@ interface PvpStore {
   reset:        () => void
 }
 
-const SERVER = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
+const SERVER = import.meta.env.VITE_API_URL ?? ''
 
 export const usePvpStore = create<PvpStore>((set, get) => ({
   socket: null,

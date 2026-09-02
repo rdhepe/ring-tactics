@@ -201,7 +201,7 @@ function QueuedSkillBadge({ item: { skill, sourceName, bonus }, index, side, onR
 
 // ─── Player self/ally queued-skill badge — larger, image-first, no × clutter ──
 
-function PlayerQueueBadge({ item: { skill, bonus }, index, onRemove }: {
+function PlayerQueueBadge({ item: { skill, bonus }, index, onRemove: _onRemove }: {
   item: IncomingQueued; index: number; onRemove: () => void
 }) {
   const [hovered, setHovered] = useState(false)
