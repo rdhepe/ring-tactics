@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  --color-px-base:      #0c0e1a;
+  --color-px-panel:     #141726;
+  --color-px-surface:   #1d2235;
+  --color-px-hover:     #252d47;
+  --color-px-border:    #2e3755;
+  --color-px-border2:   #445180;
+  --color-px-gold:      #ffd166;
+  --color-px-golddim:   #7a5b1e;
+  --color-px-text:      #e2e8ff;
+  --color-px-muted:     #8892b8;
+  --color-px-dim:       #4a5578;
+  --color-px-str:       #f45e3f;
+  --color-px-mag:       #6b9ff5;
+  --color-px-spi:       #38d9a9;
+  --color-px-agi:       #ffd166;
+  --color-px-rnd:       #8892b8;
+  --color-px-common:    #8892b8;
+  --color-px-uncommon:  #38d9a9;
+  --color-px-rare:      #6b9ff5;
+  --color-px-legendary: #ffd166;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-game:  'Rajdhani', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #0c0e1a;
+  color: #e2e8ff;
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { width: 100%; max-width: 100%; margin: 0; text-align: left; }
+
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,.07) 2px, rgba(0,0,0,.07) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes target-blink {
+  0%, 100% { box-shadow: 0 0 6px #6b9ff555; }
+  50%       { box-shadow: 0 0 22px #6b9ff5cc, 0 0 40px #6b9ff544; }
+}
