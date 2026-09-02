@@ -77,8 +77,8 @@ export function SkillBox({ skill, battleChar, pool, isQueued, isPending, clickab
         const opening = !tipVisible
         if (opening && wrapRef.current) {
           const rect = wrapRef.current.getBoundingClientRect()
-          // flip upward if less than 280px of space below
-          setTipAbove(window.innerHeight - rect.bottom < 280)
+          // flip upward if the enlarged tooltip would not fit below
+          setTipAbove(window.innerHeight - rect.bottom < 340)
         }
         setTipVisible(v => !v)
         if (opening) window.dispatchEvent(new CustomEvent('skillbox-tip-open', { detail: skill.id }))
@@ -95,7 +95,7 @@ export function SkillBox({ skill, battleChar, pool, isQueued, isPending, clickab
               : { top: '100%',    marginTop: 6 }),
             left: '50%',
             transform: 'translateX(-50%)',
-            width: 220,
+            width: 280,
             background: '#0c0e1a',
             border: `1px solid ${accent}66`,
             borderLeft: `3px solid ${accent}`,
@@ -106,43 +106,43 @@ export function SkillBox({ skill, battleChar, pool, isQueued, isPending, clickab
           }}
         >
           {/* header */}
-          <div className="px-2 py-1.5 flex items-center gap-2"
+          <div className="px-3 py-2 flex items-center gap-3"
                style={{ background: accent + '22', borderBottom: `1px solid ${accent}33` }}>
             {skill.iconUrl && (
               <img src={skill.iconUrl} alt=""
-                   style={{ width: 24, height: 24, objectFit: 'cover', flexShrink: 0 }} />
+                   style={{ width: 32, height: 32, objectFit: 'cover', flexShrink: 0 }} />
             )}
             <span className="font-bold truncate"
-                  style={{ color: accent, fontFamily: "'Press Start 2P', monospace", fontSize: 8 }}>
+                  style={{ color: accent, fontFamily: "'Press Start 2P', monospace", fontSize: 10 }}>
               {skill.name.toUpperCase()}
             </span>
           </div>
           {/* description */}
-          <p className="px-2 py-2 text-px-muted leading-snug" style={{ fontSize: 10 }}>
+          <p className="px-3 py-3 text-px-muted leading-snug" style={{ fontSize: 12 }}>
             {skill.description}
           </p>
           {/* cost */}
-          <div className="px-2 pb-2 flex items-center gap-2"
+          <div className="px-3 pb-3 flex items-center gap-3"
                style={{ borderBottom: '1px solid #1d2235' }}>
-            <span style={{ fontSize: 8, color: '#4a5578', fontFamily: 'monospace' }}>COST</span>
+            <span style={{ fontSize: 10, color: '#4a5578', fontFamily: 'monospace' }}>COST</span>
             <EnergyCostDisplay cost={skill.cost} size="sm" />
           </div>
           {/* meta */}
-          <div className="px-2 pb-2 flex flex-wrap gap-x-3 gap-y-0.5"
+          <div className="px-3 pb-3 flex flex-wrap gap-x-4 gap-y-1"
                style={{ borderTop: '1px solid #1d2235', paddingTop: 4 }}>
-            <span style={{ fontSize: 8, color: accent, fontFamily: 'monospace', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 10, color: accent, fontFamily: 'monospace', textTransform: 'uppercase' }}>
               {skill.mainClass}
             </span>
-            <span style={{ fontSize: 8, color: '#8892b8', fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 10, color: '#8892b8', fontFamily: 'monospace' }}>
               {skill.persistence}
             </span>
             {skill.cooldown > 0 && (
-              <span style={{ fontSize: 8, color: '#ffd166', fontFamily: 'monospace' }}>
+              <span style={{ fontSize: 10, color: '#ffd166', fontFamily: 'monospace' }}>
                 CD: {skill.cooldown}
               </span>
             )}
             {skill.isAffliction && (
-              <span style={{ fontSize: 8, color: '#a855f7', fontFamily: 'monospace' }}>Affliction</span>
+              <span style={{ fontSize: 10, color: '#a855f7', fontFamily: 'monospace' }}>Affliction</span>
             )}
           </div>
         </div>
@@ -150,7 +150,7 @@ export function SkillBox({ skill, battleChar, pool, isQueued, isPending, clickab
       <button
         className="relative flex flex-col items-center justify-end w-full transition-all"
         style={{
-          width: 80, height: 92,
+          width: 92, height: 106,
           background: bg,
           border: `2px solid ${border}`,
           cursor: clickable && !isBlocked ? 'pointer' : 'default',
@@ -168,11 +168,11 @@ export function SkillBox({ skill, battleChar, pool, isQueued, isPending, clickab
           src={skill.iconUrl}
           alt={skill.name}
           className="absolute top-0 left-0 w-full"
-          style={{ height: 74, objectFit: 'cover', opacity: isBlocked ? 0.3 : 0.9 }}
+          style={{ height: 88, objectFit: 'cover', opacity: isBlocked ? 0.3 : 0.9 }}
         />
       ) : (
         <span className="absolute top-0 left-0 w-full flex items-center justify-center font-bold"
-              style={{ height: 74, color: isBlocked ? '#4a5578' : accent, fontSize: 28 }}>
+            style={{ height: 88, color: isBlocked ? '#4a5578' : accent, fontSize: 32 }}>
           {skill.name[0]}
         </span>
       )}
@@ -269,7 +269,7 @@ export function AISkillBox({ skill }: AISkillBoxProps) {
         const opening = !tipVisible
         if (opening && wrapRef.current) {
           const rect = wrapRef.current.getBoundingClientRect()
-          setTipAbove(window.innerHeight - rect.bottom < 280)
+          setTipAbove(window.innerHeight - rect.bottom < 340)
         }
         setTipVisible(v => !v)
         if (opening) window.dispatchEvent(new CustomEvent('skillbox-tip-open', { detail: skill.id }))
@@ -283,7 +283,7 @@ export function AISkillBox({ skill }: AISkillBoxProps) {
             ...(tipAbove ? { bottom: '100%', marginBottom: 6 } : { top: '100%', marginTop: 6 }),
             left: '50%',
             transform: 'translateX(-50%)',
-            width: 220,
+            width: 280,
             background: '#0c0e1a',
             border: `1px solid ${accent}66`,
             borderLeft: `3px solid ${accent}`,
@@ -293,39 +293,39 @@ export function AISkillBox({ skill }: AISkillBoxProps) {
             pointerEvents: 'auto',
           }}
         >
-          <div className="px-2 py-1.5 flex items-center gap-2"
+          <div className="px-3 py-2 flex items-center gap-3"
                style={{ background: accent + '22', borderBottom: `1px solid ${accent}33` }}>
             <span className="font-bold truncate"
-                  style={{ color: accent, fontFamily: "'Press Start 2P', monospace", fontSize: 8 }}>
+                  style={{ color: accent, fontFamily: "'Press Start 2P', monospace", fontSize: 10 }}>
               {skill.name.toUpperCase()}
             </span>
           </div>
-          <p className="px-2 py-2 text-px-muted leading-snug" style={{ fontSize: 10 }}>
+          <p className="px-3 py-3 text-px-muted leading-snug" style={{ fontSize: 12 }}>
             {skill.description}
           </p>
-          <div className="px-2 pb-2 flex flex-wrap gap-x-3 gap-y-0.5"
+          <div className="px-3 pb-3 flex flex-wrap gap-x-4 gap-y-1"
                style={{ borderTop: '1px solid #1d2235', paddingTop: 4 }}>
-            <span style={{ fontSize: 8, color: accent, fontFamily: 'monospace', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 10, color: accent, fontFamily: 'monospace', textTransform: 'uppercase' }}>
               {skill.mainClass}
             </span>
-            <span style={{ fontSize: 8, color: '#8892b8', fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 10, color: '#8892b8', fontFamily: 'monospace' }}>
               {skill.persistence}
             </span>
             {skill.cooldown > 0 && (
-              <span style={{ fontSize: 8, color: '#ffd166', fontFamily: 'monospace' }}>CD: {skill.cooldown}</span>
+              <span style={{ fontSize: 10, color: '#ffd166', fontFamily: 'monospace' }}>CD: {skill.cooldown}</span>
             )}
           </div>
         </div>
       )}
       <div className="shrink-0 flex flex-col items-center justify-end relative overflow-hidden"
-           style={{ width: 80, height: 92, background: accent + '12', border: `2px solid ${accent}44`, cursor: 'context-menu' }}>
+         style={{ width: 92, height: 106, background: accent + '12', border: `2px solid ${accent}44`, cursor: 'context-menu' }}>
         {skill.iconUrl ? (
           <img src={skill.iconUrl} alt={skill.name}
                className="absolute top-0 left-0 w-full"
-               style={{ height: 74, objectFit: 'cover', opacity: 0.9 }} />
+            style={{ height: 88, objectFit: 'cover', opacity: 0.9 }} />
         ) : (
           <span className="absolute top-0 left-0 w-full flex items-center justify-center font-bold"
-                style={{ height: 74, color: accent, fontSize: 28 }}>
+                style={{ height: 88, color: accent, fontSize: 32 }}>
             {skill.name[0]}
           </span>
         )}

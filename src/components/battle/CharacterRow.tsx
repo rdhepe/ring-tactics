@@ -550,7 +550,7 @@ function Portrait({ bc, side, active, targeted, incomingQueued, onRemoveQueued, 
     <div
       className="flex flex-col items-center gap-1 shrink-0"
       style={{
-        width: 108, position: 'relative', overflow: 'visible',
+        width: 124, position: 'relative', overflow: 'visible',
         cursor: onClick && !isDead ? 'pointer' : 'default',
       }}
       onClick={!isDead ? onClick : undefined}
@@ -559,7 +559,7 @@ function Portrait({ bc, side, active, targeted, incomingQueued, onRemoveQueued, 
       <div
         className="relative flex items-center justify-center font-bold text-white"
         style={{
-          width: 104, height: 104, flexShrink: 0,
+          width: 120, height: 120, flexShrink: 0,
           border: `3px solid ${borderColor}`,
           boxShadow: targeted ? undefined : active ? '0 0 8px #ffd16644' : 'none',
           animation: targeted ? 'target-blink 1.1s ease-in-out infinite' : 'none',
