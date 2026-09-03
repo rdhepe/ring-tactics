@@ -1,8 +1,11 @@
+import { useRef } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { LeaderboardGrid } from '../components/leaderboards/LeaderboardGrid'
 import { ALL_CHARACTERS } from '../data/characters'
 import arenaBackground from '../assets/backgrounds/background-1.jpg'
 import './Home.css'
+import './HomeCarousel.css'
 
 const ENERGY = [
   ['Power', 'P', '#ef4b3f'], ['Technical', 'T', '#4f8fd8'],
@@ -16,6 +19,12 @@ const FORMAT = [
 ] as const
 
 export function HomePage() {
+  const rosterRef = useRef<HTMLDivElement>(null)
+
+  const scrollRoster = (direction: number) => {
+    rosterRef.current?.scrollBy({ left: direction * 260, behavior: 'smooth' })
+  }
+
   return (
     <main className="event-home">
       <section className="event-hero" style={{ backgroundImage: `url(${arenaBackground})` }}>
@@ -50,21 +59,29 @@ export function HomePage() {
           <Header kicker="Available tonight" title="The Fight Bill" light>
             <p className="event-stamp">6 WRESTLERS / 1 RING</p>
           </Header>
-          <div className="event-roster">
-            {ALL_CHARACTERS.map((character, index) => (
-              <Link key={character.id} to={`/characters/${character.id}`} className="event-wrestler">
-                <span className="event-wrestler-number">0{index + 1}</span>
-                <div className="event-wrestler-photo">
-                  {character.avatarUrl
-                    ? <img src={character.avatarUrl} alt={character.name} />
-                    : <span>{character.name[0]}</span>}
-                </div>
-                <div className="event-wrestler-name">
-                  <strong>{character.name}</strong>
-                  <span>{character.title ?? character.classes[0]}</span>
-                </div>
-              </Link>
-            ))}
+          <div className="event-roster-carousel">
+            <button className="event-roster-control event-roster-control-prev" type="button" onClick={() => scrollRoster(-1)} aria-label="Show previous wrestlers">
+              <ChevronLeft aria-hidden="true" />
+            </button>
+            <div ref={rosterRef} className="event-roster" aria-label="Fight bill wrestlers">
+              {ALL_CHARACTERS.map((character, index) => (
+                <Link key={character.id} to={`/characters/${character.id}`} className="event-wrestler">
+                  <span className="event-wrestler-number">{String(index + 1).padStart(2, '0')}</span>
+                  <div className="event-wrestler-photo">
+                    {character.avatarUrl
+                      ? <img src={character.avatarUrl} alt={character.name} />
+                      : <span>{character.name[0]}</span>}
+                  </div>
+                  <div className="event-wrestler-name">
+                    <strong>{character.name}</strong>
+                    <span>{character.title ?? character.classes[0]}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+            <button className="event-roster-control event-roster-control-next" type="button" onClick={() => scrollRoster(1)} aria-label="Show next wrestlers">
+              <ChevronRight aria-hidden="true" />
+            </button>
           </div>
         </div>
       </section>

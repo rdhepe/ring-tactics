@@ -1,0 +1,61 @@
+.event-roster-carousel {
+  position: relative;
+}
+
+.event-roster {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-color: #bd2f2b #25282d;
+}
+
+.event-wrestler {
+  flex: 0 0 232px;
+  scroll-snap-align: start;
+}
+
+.event-roster-control {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: grid;
+  width: 38px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid #575b63;
+  background: #111319e8;
+  color: var(--paper);
+  transform: translateY(-50%);
+  transition: background .15s ease, color .15s ease;
+}
+
+.event-roster-control:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.event-roster-control:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+.event-roster-control svg {
+  width: 22px;
+  height: 22px;
+}
+
+.event-roster-control-prev {
+  left: 8px;
+}
+
+.event-roster-control-next {
+  right: 8px;
+}
+
+@media (max-width: 600px) {
+  .event-wrestler {
+    flex-basis: min(78vw, 280px);
+  }
+}
