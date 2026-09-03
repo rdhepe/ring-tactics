@@ -6,6 +6,7 @@ import { EnergyCostDisplay } from '../ui/EnergyOrb'
 
 const CLASS_COLOR: Record<string, string> = {
   physical:  '#f45e3f',
+  technical: '#38d9a9',
   magic:     '#6b9ff5',
   strategic: '#38d9a9',
 }

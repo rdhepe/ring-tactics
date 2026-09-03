@@ -3,6 +3,7 @@ import { EnergyCostDisplay } from './EnergyOrb'
 
 const CLASS_COLOR: Record<string, string> = {
   physical:  '#f45e3f',
+  technical: '#38d9a9',
   magic:     '#6b9ff5',
   strategic: '#38d9a9',
 }
@@ -33,10 +34,10 @@ export function SkillCard({ skill, selected, disabled, cooldownLeft = 0, onClick
         cursor: blocked ? 'not-allowed' : 'pointer',
       }}
     >
-      <div className="flex items-center gap-3 px-3 py-2">
+      <div className="flex items-center gap-4 px-4 py-3">
         {/* icon square — image when available, letter fallback */}
         <div
-          className="shrink-0 w-9 h-9 flex items-center justify-center font-bold text-base overflow-hidden"
+          className="shrink-0 w-14 h-14 flex items-center justify-center font-bold text-xl overflow-hidden"
           style={{ background: `${accent}22`, border: `1px solid ${accent}44`, color: accent }}
         >
           {skill.iconUrl
@@ -48,7 +49,7 @@ export function SkillCard({ skill, selected, disabled, cooldownLeft = 0, onClick
         {/* main content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="font-bold text-sm text-px-text uppercase tracking-wide">{skill.name}</span>
+            <span className="font-bold text-base text-px-text uppercase tracking-wide">{skill.name}</span>
             {skill.isAffliction && (
               <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5"
                     style={{ background: 'rgba(244,94,63,.15)', color: '#f45e3f', border: '1px solid #f45e3f44', fontFamily: 'monospace' }}>
@@ -56,7 +57,7 @@ export function SkillCard({ skill, selected, disabled, cooldownLeft = 0, onClick
               </span>
             )}
           </div>
-          <p className="text-xs text-px-muted leading-relaxed mt-0.5 line-clamp-2">{skill.description}</p>
+          <p className="text-sm text-px-muted leading-relaxed mt-1 line-clamp-2">{skill.description}</p>
         </div>
 
         {/* meta column */}

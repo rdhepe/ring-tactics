@@ -53,12 +53,12 @@ export function CharactersPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-6 flex gap-5">
+      <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-5">
         <div className="flex-1 min-w-0">
           {filtered.length === 0
             ? <p className="text-px-dim text-center py-16 text-sm">No wrestlers match your filters.</p>
             : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {filtered.map(c => (
                   <CharacterCard key={c.id} character={c} selected={selected?.id === c.id}
                                  onClick={() => setSelected(selected?.id === c.id ? null : c)} />
@@ -69,7 +69,7 @@ export function CharactersPage() {
         </div>
 
         {selected && (
-          <div className="arena-panel w-72 shrink-0 overflow-y-auto sticky self-start"
+          <div className="arena-panel w-full lg:w-96 shrink-0 overflow-y-auto lg:sticky self-start"
                style={{ top: 'calc(48px + 44px + 24px)', maxHeight: 'calc(100vh - 160px)', background: '#141726', border: '2px solid #2e3755' }}>
             <CharacterDetail character={selected} />
           </div>

@@ -7,7 +7,7 @@ import { CharacterRow } from './CharacterRow'
 import type { IncomingQueued } from './CharacterRow'
 import { EnergyBar } from './EnergyBar'
 import type { BattleState, EnergyPool } from '../../types'
-import { isInvulnerable, isStunned, spendEnergy } from '../../engine/battle'
+import { getEffectiveSkill, isInvulnerable, isStunned, spendEnergy } from '../../engine/battle'
 import { EnergyAllocModal } from './EnergyAllocModal'
 import { BattleField } from './BattleField'
 
@@ -262,7 +262,7 @@ function extractLastTurnLog(log: string[]): { playerLines: string[]; aiLines: st
 
 export function BattleArena() {
   const { battleState: state, selectedCharIdx, pendingSkill,
-    selectChar, setPendingSkill, queueSkill, dequeueSkill, endTurn, reset,
+    selectChar, setPendingSkill, queueSkill, dequeueSkill, switchMode, endTurn, reset,
   } = useBattleStore()
   const { addMatch } = useRankStore()
   const username = useAuthStore(state => state.username)
@@ -343,16 +343,22 @@ export function BattleArena() {
     return state!.playerQueue.find(q => q.characterIndex === charIdx)?.skillId
   }
 
+  function findEffectiveSkill(charIdx: number, skillId: string) {
+    const char = playerChars[charIdx]
+    const baseSkill = char?.character.skills.find(s => s.id === skillId)
+    return char && baseSkill ? getEffectiveSkill(char, baseSkill) : undefined
+  }
+
   /** Pool remaining for wildcard allocation: deducts this skill's fixed costs + all other queued costs. */
   function getAvailableForAlloc(charIdx: number, skillId: string): EnergyPool {
     const pool = { ...state!.player.energy }
-    const skill = playerChars[charIdx]?.character.skills.find(s => s.id === skillId)
+    const skill = findEffectiveSkill(charIdx, skillId)
     if (skill) {
       for (const t of E_KEYS) pool[t] = Math.max(0, pool[t] - (skill.cost[t] ?? 0))
     }
     for (const q of state!.playerQueue) {
       if (q.characterIndex === charIdx) continue
-      const qs = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
+      const qs = findEffectiveSkill(q.characterIndex, q.skillId)
       if (!qs) continue
       for (const t of E_KEYS) {
         pool[t] = Math.max(0, pool[t] - (qs.cost[t] ?? 0) - (q.randomAllocation?.[t] ?? 0))
@@ -363,7 +369,7 @@ export function BattleArena() {
 
   /** True when the player has a real choice for wildcard slots (>1 energy type available). */
   function hasRealChoice(charIdx: number, skillId: string): boolean {
-    const skill = playerChars[charIdx]?.character.skills.find(s => s.id === skillId)
+    const skill = findEffectiveSkill(charIdx, skillId)
     if (!skill?.cost.random) return false
     const pool = getAvailableForAlloc(charIdx, skillId)
     return E_KEYS.filter(t => pool[t] > 0).length > 1
@@ -384,7 +390,7 @@ export function BattleArena() {
     const remaining = { ...state!.player.energy }
     for (const q of state!.playerQueue) {
       if (q.characterIndex === charIdx) continue
-      const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
+      const skill = findEffectiveSkill(q.characterIndex, q.skillId)
       if (skill) spendEnergy(skill.cost, remaining)
     }
     return remaining
@@ -394,12 +400,12 @@ export function BattleArena() {
     return state!.playerQueue
       .filter(q => {
         if (q.targetTeam !== 'ai') return false
-        const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
+        const skill = findEffectiveSkill(q.characterIndex, q.skillId)
         return skill?.targetType === 'all_enemies' || q.targetIndex === aiSlot
       })
       .flatMap(q => {
         const caster = playerChars[q.characterIndex]
-        const skill  = caster?.character.skills.find(s => s.id === q.skillId)
+        const skill  = findEffectiveSkill(q.characterIndex, q.skillId)
         return skill && caster ? [{ skill, sourceName: caster.character.name, casterIdx: q.characterIndex,
           bonus: (() => {
             const e = skill.effects.find(ef => ef.stackIncrement)
@@ -414,20 +420,20 @@ export function BattleArena() {
     return state!.playerQueue
       .filter(q => {
         if (q.targetTeam !== 'player') return false
-        const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
+        const skill = findEffectiveSkill(q.characterIndex, q.skillId)
         if (!skill) return false
         return skill.targetType === 'all_allies' || q.targetIndex === playerSlot
       })
       .flatMap(q => {
         const caster = playerChars[q.characterIndex]
-        const skill  = caster?.character.skills.find(s => s.id === q.skillId)
+        const skill  = findEffectiveSkill(q.characterIndex, q.skillId)
         return skill && caster ? [{ skill, sourceName: caster.character.name, casterIdx: q.characterIndex }] : []
       })
   }
 
   function isValidAITarget(charIdx: number): boolean {
     if (!pendingSkill) return false
-    const skill = playerChars[pendingSkill.charIdx]?.character.skills.find(s => s.id === pendingSkill.skillId)
+    const skill = findEffectiveSkill(pendingSkill.charIdx, pendingSkill.skillId)
     if (!skill) return false
     const char = aiChars[charIdx]
     if (!char || char.isDead) return false
@@ -437,7 +443,7 @@ export function BattleArena() {
 
   function isValidPlayerTarget(charIdx: number): boolean {
     if (!pendingSkill) return false
-    const skill = playerChars[pendingSkill.charIdx]?.character.skills.find(s => s.id === pendingSkill.skillId)
+    const skill = findEffectiveSkill(pendingSkill.charIdx, pendingSkill.skillId)
     if (!skill || skill.targetType !== 'ally') return false
     const char = playerChars[charIdx]
     return !!char && !char.isDead && charIdx !== pendingSkill.charIdx
@@ -448,8 +454,10 @@ export function BattleArena() {
     const bc = playerChars[slot]
     if (!bc || bc.isDead || isStunned(bc)) return
     selectChar(slot)
-    const skill = bc.character.skills.find(s => s.id === skillId)
-    if (!skill) return
+    const baseSkill = bc.character.skills.find(s => s.id === skillId)
+    if (!baseSkill) return
+    if (baseSkill.modeToggle) { switchMode(slot); return }
+    const skill = getEffectiveSkill(bc, baseSkill)
 
     if (getQueuedSkillId(slot) === skillId) {
       dequeueSkill(slot); setPendingSkill(null); return
@@ -486,7 +494,7 @@ export function BattleArena() {
           <span className="text-xs font-bold uppercase tracking-widest"
                 style={{ color: '#6b9ff5', fontFamily: 'monospace' }}>
             {(() => {
-              const skill = pendingSkill ? playerChars[pendingSkill.charIdx]?.character.skills.find(s => s.id === pendingSkill.skillId) : null
+              const skill = pendingSkill ? findEffectiveSkill(pendingSkill.charIdx, pendingSkill.skillId) : null
               return skill?.targetType === 'ally' ? '► Click a teammate to target' : '► Click an enemy to target'
             })()}
           </span>
@@ -530,7 +538,7 @@ export function BattleArena() {
 
       {/* wildcard energy allocation modal */}
       {pendingAlloc && (() => {
-        const skill = playerChars[pendingAlloc.charIdx]?.character.skills.find(s => s.id === pendingAlloc.skillId)
+        const skill = findEffectiveSkill(pendingAlloc.charIdx, pendingAlloc.skillId)
         if (!skill) return null
         return (
           <EnergyAllocModal

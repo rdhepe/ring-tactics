@@ -1,7 +1,7 @@
 import type { Skill } from '../../types'
 import { EnergyCostDisplay } from '../ui/EnergyOrb'
 
-const CLASS_COLOR: Record<string, string> = { physical: '#f45e3f', magic: '#6b9ff5', strategic: '#38d9a9' }
+const CLASS_COLOR: Record<string, string> = { physical: '#f45e3f', technical: '#38d9a9', magic: '#6b9ff5', strategic: '#38d9a9' }
 
 interface SkillInfoPanelProps { skill: Skill | null; charName?: string }
 

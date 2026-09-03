@@ -1,6 +1,6 @@
 import type { BattleCharacter, EnergyPool } from '../../types'
 import { SkillCard } from '../ui/SkillCard'
-import { isStunned, canAfford, getSkillCooldownLeft } from '../../engine/battle'
+import { isStunned, canAfford, getEffectiveSkill, getSkillCooldownLeft } from '../../engine/battle'
 
 interface SkillPanelProps {
   battleChar: BattleCharacter
@@ -26,18 +26,19 @@ export function SkillPanel({ battleChar, pool, selectedSkillId, queuedSkillId, o
                          style={{ background: 'rgba(255,209,102,.15)', color: '#ffd166', border: '1px solid #ffd16644', fontFamily: 'monospace' }}>STUNNED</span>}
       </div>
       <div className="flex flex-col">
-        {character.skills.map(skill => {
-          const cooldownLeft = getSkillCooldownLeft(battleChar, skill.id)
+        {character.skills.map(baseSkill => {
+          const skill = getEffectiveSkill(battleChar, baseSkill)
+          const cooldownLeft = getSkillCooldownLeft(battleChar, baseSkill.id)
           const cantAfford = !canAfford(skill.cost, pool)
-          const isQueued = queuedSkillId === skill.id
+          const isQueued = queuedSkillId === baseSkill.id
           return (
             <SkillCard
-              key={skill.id}
+              key={baseSkill.id}
               skill={skill}
-              selected={selectedSkillId === skill.id || isQueued}
+              selected={selectedSkillId === baseSkill.id || isQueued}
               disabled={stunned || battleChar.isDead || (cantAfford && cooldownLeft === 0)}
               cooldownLeft={cooldownLeft}
-              onClick={() => onSelectSkill(skill.id)}
+              onClick={() => onSelectSkill(baseSkill.id)}
             />
           )
         })}

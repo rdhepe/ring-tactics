@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { BattleCharacter, EnergyPool, Skill } from '../../types'
 import { HPBar } from '../ui/HPBar'
 import { getRarityColor } from '../ui/RarityBadge'
-import { isStunned, isInvulnerable, getSkillStreakInfo } from '../../engine/battle'
+import { isStunned, isInvulnerable, getEffectiveSkill, getSkillStreakInfo } from '../../engine/battle'
 import { SkillBox, AISkillBox } from './SkillBox'
 import { CHARACTER_MAP } from '../../data/characters'
 
@@ -13,10 +13,15 @@ const EFFECT_BADGE: Record<string, { icon: string; color: string }> = {
   destructible_defense:{ icon: '🧱', color: '#8892b8' },
   damage_boost:        { icon: '🔥', color: '#f45e3f' },
   affliction:          { icon: '☠', color: '#a855f7' },
+  setup_mode:          { icon: '⚙', color: '#6b9ff5' },
+  skill_mark:          { icon: '◆', color: '#ffd166' },
+  precision_mode:      { icon: 'P', color: '#38d9a9' },
+  chaos_mode:          { icon: 'C', color: '#f45e3f' },
 }
 
 const CLASS_COLOR: Record<string, string> = {
   physical:  '#f45e3f',
+  technical: '#38d9a9',
   magic:     '#6b9ff5',
   strategic: '#38d9a9',
 }
@@ -323,6 +328,9 @@ const EFFECT_LABEL: Record<string, string> = {
   destructible_defense:'Destructible Shield',
   damage_boost:        'Damage Boost',
   affliction:          'Affliction',
+  skill_mark:          'Marked',
+  precision_mode:      'Precision Mode',
+  chaos_mode:          'Chaos Mode',
 }
 
 function CastSkillBadge({ skillId, charId, effects, index, markCount, side }: {
@@ -411,7 +419,9 @@ function CastSkillBadge({ skillId, charId, effects, index, markCount, side }: {
                                 textTransform: 'capitalize', lineHeight: 1.3 }}>{label}</p>
                     {valueStr && <p style={{ fontSize: 9, color: '#c8cfe8', lineHeight: 1.3 }}>{valueStr}</p>}
                     <p style={{ fontSize: 8, color: '#6a7a9c', lineHeight: 1.3 }}>
-                      {turns > 0 ? `${turns} turn${turns !== 1 ? 's' : ''} remaining` : 'Expires this turn'}
+                      {ae.effect.type === 'precision_mode' || ae.effect.type === 'chaos_mode'
+                        ? 'Current style'
+                        : turns > 0 ? `${turns} turn${turns !== 1 ? 's' : ''} remaining` : 'Expires this turn'}
                     </p>
                   </div>
                 </div>
@@ -704,24 +714,25 @@ export function CharacterRow({
           onClick={onPlayerClick}
         />
         <div className="flex gap-1.5 ml-2">
-          {playerChar.character.skills.map(skill => {
+          {playerChar.character.skills.map(baseSkill => {
+            const skill = getEffectiveSkill(playerChar, baseSkill)
             const streakEffect = skill.effects.find(e => e.stackIncrement && e.stackDecayTurns)
             const streak = streakEffect
-              ? getSkillStreakInfo(playerChar, skill.id, streakEffect.stackIncrement!, streakEffect.stackDecayTurns!, currentTurn)
+              ? getSkillStreakInfo(playerChar, baseSkill.id, streakEffect.stackIncrement!, streakEffect.stackDecayTurns!, currentTurn)
               : null
             return (
               <SkillBox
-                key={skill.id}
+                key={baseSkill.id}
                 skill={skill}
                 battleChar={playerChar}
                 pool={playerEnergy}
-                isQueued={queuedSkillId === skill.id}
-                isPending={pendingSkillId === skill.id && playerSelected}
+                isQueued={queuedSkillId === baseSkill.id}
+                isPending={pendingSkillId === baseSkill.id && playerSelected}
                 clickable={isPlayerTurn && !playerChar.isDead && !isStunned(playerChar)}
                 streak={streak}
                 onHover={onSkillHover}
-                onClick={() => onSkillClick(skill.id, slot)}
-                onDoubleClick={() => onSkillClick(skill.id, slot)}
+                onClick={() => onSkillClick(baseSkill.id, slot)}
+                onDoubleClick={() => onSkillClick(baseSkill.id, slot)}
               />
             )
           })}
@@ -743,8 +754,8 @@ export function CharacterRow({
           onClick={aiTargeted ? onAIClick : undefined}
         />
         <div className="flex gap-1.5 mr-2 flex-row-reverse">
-          {aiChar.character.skills.map(skill => (
-            <AISkillBox key={skill.id} skill={skill} />
+          {aiChar.character.skills.map(baseSkill => (
+            <AISkillBox key={baseSkill.id} skill={getEffectiveSkill(aiChar, baseSkill)} />
           ))}
         </div>
       </div>

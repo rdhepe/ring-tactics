@@ -73,15 +73,15 @@ export function TeamSelect({ onStart, onBack }: TeamSelectProps) {
         </div>
       )}
 
-      <div className="flex-1 max-w-6xl mx-auto w-full px-4 py-6 flex gap-5">
-        <div className="flex-1 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 content-start">
+      <div className="flex-1 max-w-6xl mx-auto w-full px-4 py-6 flex flex-col lg:flex-row gap-5">
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 content-start">
           {ALL_CHARACTERS.map(c => (
             <CharacterCard key={c.id} character={c} selected={team.some(x => x.id === c.id)}
                            onClick={() => { toggleChar(c); setPreview(c) }} />
           ))}
         </div>
         {preview && (
-          <div className="arena-panel w-72 shrink-0 overflow-y-auto self-start"
+          <div className="arena-panel w-full lg:w-96 shrink-0 overflow-y-auto self-start"
                style={{ border: '2px solid #2e3755', background: '#141726', maxHeight: 'calc(100vh - 200px)', position: 'sticky', top: '120px' }}>
             <CharacterDetail character={preview} selected={team.some(x => x.id === preview.id)}
                              onSelect={() => toggleChar(preview)}

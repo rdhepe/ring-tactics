@@ -31,6 +31,7 @@ interface PvpStore {
   cancelSearch: () => void
   submitTeam:   (team: Character[]) => void
   submitQueue:  (queue: QueuedSkill[]) => void
+  switchMode:   (charIdx: number) => void
   reset:        () => void
 }
 
@@ -113,6 +114,7 @@ export const usePvpStore = create<PvpStore>((set, get) => ({
   cancelSearch: () => { get().socket?.emit('cancel_search'); set({ pvpPhase: 'idle' }) },
   submitTeam:  (team) => get().socket?.emit('submit_team', { team }),
   submitQueue: (queue) => get().socket?.emit('submit_queue', { queue }),
+  switchMode:  (charIdx) => get().socket?.emit('switch_mode', { charIdx }),
 
   reset: () => {
     get().socket?.disconnect()

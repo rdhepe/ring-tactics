@@ -7,7 +7,7 @@ import type { IncomingQueued } from './CharacterRow'
 import { EnergyBar } from './EnergyBar'
 import { EnergyAllocModal } from './EnergyAllocModal'
 import type { BattleState, EnergyPool, QueuedSkill } from '../../types'
-import { isInvulnerable, isStunned, spendEnergy } from '../../engine/battle'
+import { getEffectiveSkill, isInvulnerable, isStunned, spendEnergy } from '../../engine/battle'
 import { BattleField } from './BattleField'
 
 const E_KEYS = ['strength', 'magic', 'spirit', 'agility'] as const
@@ -57,6 +57,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
   const opponentUsername  = usePvpStore(s => s.opponentUsername)
   const serverTime        = usePvpStore(s => s.timeLeft)
   const submitQueue       = usePvpStore(s => s.submitQueue)
+  const switchMode        = usePvpStore(s => s.switchMode)
   const myUsername        = useAuthStore().username
   const recordMissionMatch = useMissionStore(s => s.recordMatch)
 
@@ -116,11 +117,17 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
     return localQueue.find(q => q.characterIndex === charIdx)?.skillId
   }
 
+  function findEffectiveSkill(charIdx: number, skillId: string) {
+    const char = playerChars[charIdx]
+    const baseSkill = char?.character.skills.find(s => s.id === skillId)
+    return char && baseSkill ? getEffectiveSkill(char, baseSkill) : undefined
+  }
+
   function getEnergyForChar(charIdx: number): EnergyPool {
     const pool = { ...state.player.energy }
     for (const q of localQueue) {
       if (q.characterIndex === charIdx) continue
-      const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
+      const skill = findEffectiveSkill(q.characterIndex, q.skillId)
       if (skill) spendEnergy(skill.cost, pool)
     }
     return pool
@@ -128,11 +135,11 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
 
   function getAvailableForAlloc(charIdx: number, skillId: string): EnergyPool {
     const pool = { ...state.player.energy }
-    const skill = playerChars[charIdx]?.character.skills.find(s => s.id === skillId)
+    const skill = findEffectiveSkill(charIdx, skillId)
     if (skill) for (const t of E_KEYS) pool[t] = Math.max(0, pool[t] - (skill.cost[t] ?? 0))
     for (const q of localQueue) {
       if (q.characterIndex === charIdx) continue
-      const qs = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
+      const qs = findEffectiveSkill(q.characterIndex, q.skillId)
       if (!qs) continue
       for (const t of E_KEYS) pool[t] = Math.max(0, pool[t] - (qs.cost[t] ?? 0) - (q.randomAllocation?.[t] ?? 0))
     }
@@ -140,7 +147,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
   }
 
   function hasRealChoice(charIdx: number, skillId: string): boolean {
-    const skill = playerChars[charIdx]?.character.skills.find(s => s.id === skillId)
+    const skill = findEffectiveSkill(charIdx, skillId)
     if (!skill?.cost.random) return false
     return E_KEYS.filter(t => getAvailableForAlloc(charIdx, skillId)[t] > 0).length > 1
   }
@@ -168,7 +175,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
 
   function isValidAITarget(charIdx: number) {
     if (!pendingSkill) return false
-    const skill = playerChars[pendingSkill.charIdx]?.character.skills.find(s => s.id === pendingSkill.skillId)
+    const skill = findEffectiveSkill(pendingSkill.charIdx, pendingSkill.skillId)
     const char  = aiChars[charIdx]
     if (!skill || !char || char.isDead || isInvulnerable(char)) return false
     return skill.targetType === 'enemy' || skill.targetType === 'any'
@@ -176,7 +183,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
 
   function isValidPlayerTarget(charIdx: number) {
     if (!pendingSkill) return false
-    const skill = playerChars[pendingSkill.charIdx]?.character.skills.find(s => s.id === pendingSkill.skillId)
+    const skill = findEffectiveSkill(pendingSkill.charIdx, pendingSkill.skillId)
     if (!skill || skill.targetType !== 'ally') return false
     const char = playerChars[charIdx]
     return !!char && !char.isDead && charIdx !== pendingSkill.charIdx
@@ -187,8 +194,10 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
     const bc = playerChars[slot]
     if (!bc || bc.isDead || isStunned(bc)) return
     setSelectedChar(slot)
-    const skill = bc.character.skills.find(s => s.id === skillId)
-    if (!skill) return
+    const baseSkill = bc.character.skills.find(s => s.id === skillId)
+    if (!baseSkill) return
+    if (baseSkill.modeToggle) { setLocalQueue(prev => prev.filter(q => q.characterIndex !== slot)); setPendingSkill(null); switchMode(slot); return }
+    const skill = getEffectiveSkill(bc, baseSkill)
     if (getQueuedSkillId(slot) === skillId) { dequeueLocal(slot); setPendingSkill(null); return }
     if (skill.targetType === 'self')        { tryQueue(slot, skillId, 'player', slot); return }
     if (skill.targetType === 'all_enemies') { tryQueue(slot, skillId, 'ai', 0);       return }
@@ -200,12 +209,12 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
     return localQueue
       .filter(q => {
         if (q.targetTeam !== 'ai') return false
-        const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
+        const skill = findEffectiveSkill(q.characterIndex, q.skillId)
         return skill && (skill.targetType === 'all_enemies' || q.targetIndex === aiSlot)
       })
       .flatMap(q => {
         const caster = playerChars[q.characterIndex]
-        const skill  = caster?.character.skills.find(s => s.id === q.skillId)
+        const skill  = findEffectiveSkill(q.characterIndex, q.skillId)
         if (!skill || !caster) return []
         const e     = skill.effects.find(ef => ef.stackIncrement)
         const bonus = e?.stackIncrement && (caster.skillUseCounts[skill.id] ?? 0) > 0
@@ -218,12 +227,12 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
     return localQueue
       .filter(q => {
         if (q.targetTeam !== 'player') return false
-        const skill = playerChars[q.characterIndex]?.character.skills.find(s => s.id === q.skillId)
+        const skill = findEffectiveSkill(q.characterIndex, q.skillId)
         return skill && (skill.targetType === 'all_allies' || q.targetIndex === playerSlot)
       })
       .flatMap(q => {
         const caster = playerChars[q.characterIndex]
-        const skill  = caster?.character.skills.find(s => s.id === q.skillId)
+        const skill  = findEffectiveSkill(q.characterIndex, q.skillId)
         return skill && caster ? [{ skill, sourceName: caster.character.name, casterIdx: q.characterIndex }] : []
       })
   }
@@ -301,9 +310,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
         <span className="text-xs font-bold uppercase tracking-widest"
               style={{ color: '#6b9ff5', fontFamily: 'monospace' }}>
           {(() => {
-            const skill = pendingSkill
-              ? playerChars[pendingSkill.charIdx]?.character.skills.find(s => s.id === pendingSkill.skillId)
-              : null
+            const skill = pendingSkill ? findEffectiveSkill(pendingSkill.charIdx, pendingSkill.skillId) : null
             return skill?.targetType === 'ally' ? '► Click a teammate to target' : '► Click an enemy to target'
           })()}
         </span>
@@ -347,7 +354,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
 
       {/* ── Energy allocation modal ── */}
       {pendingAlloc && (() => {
-        const skill = playerChars[pendingAlloc.charIdx]?.character.skills.find(s => s.id === pendingAlloc.skillId)
+        const skill = findEffectiveSkill(pendingAlloc.charIdx, pendingAlloc.skillId)
         if (!skill) return null
         return (
           <EnergyAllocModal

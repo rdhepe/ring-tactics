@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { BattleState, BattlePhase, Character, TeamId } from '../types'
-import { buildAIQueue, initBattle, resolveSinglePlayerTurn } from '../engine/battle'
+import { buildAIQueue, initBattle, resolveSinglePlayerTurn, switchCombatMode } from '../engine/battle'
 
 interface PendingSkill { charIdx: number; skillId: string }
 
@@ -14,6 +14,7 @@ interface BattleStore {
   setPendingSkill:(p: PendingSkill | null) => void
   queueSkill:     (charIdx: number, skillId: string, targetTeam: TeamId, targetIdx: number, randomAllocation?: Partial<import('../types').EnergyPool>) => void
   dequeueSkill:   (charIdx: number) => void
+  switchMode:     (charIdx: number) => void
   endTurn:        () => void
   reset:          () => void
 }
@@ -46,6 +47,12 @@ export const useBattleStore = create<BattleStore>((set, get) => ({
     const next = structuredClone(battleState) as BattleState
     next.playerQueue = next.playerQueue.filter(q => q.characterIndex !== charIdx)
     set({ battleState: next })
+  },
+
+  switchMode: (charIdx) => {
+    const { battleState } = get()
+    if (!battleState) return
+    set({ battleState: switchCombatMode(battleState, 'player', charIdx), pendingSkill: null })
   },
 
   endTurn: () => {

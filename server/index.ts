@@ -12,7 +12,7 @@ import helmet from 'helmet'
 import { rateLimit } from 'express-rate-limit'
 import { parseCookie } from 'cookie'
 import { z } from 'zod'
-import { initBattle, resolveSinglePlayerTurn } from '../src/engine/battle.js'
+import { initBattle, resolveSinglePlayerTurn, switchCombatMode } from '../src/engine/battle.js'
 import type { BattleState, Character, QueuedSkill, BattlePhase, TeamId } from '../src/types/index.js'
 import {
   createSession,
@@ -410,6 +410,19 @@ io.on('connection', (socket: Socket) => {
     if (!active || active.socketId !== socket.id) return
 
     void executeTurn(io, room, queue)
+  })
+
+  socket.on('switch_mode', ({ charIdx }: { charIdx: number }) => {
+    const code = socketToRoom.get(socket.id)
+    const room = code ? rooms.get(code) : null
+    if (!room?.state || room.state.phase !== 'player_turn') return
+
+    const active = room.activeSlot === 'p1' ? room.p1 : room.p2
+    if (!active || active.socketId !== socket.id) return
+
+    const teamId: TeamId = room.activeSlot === 'p1' ? 'player' : 'ai'
+    room.state = switchCombatMode(room.state, teamId, charIdx)
+    emit(io, room)
   })
 
   socket.on('disconnect', () => {

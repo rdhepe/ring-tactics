@@ -23,9 +23,9 @@ export function CharacterCard({ character, selected, onClick }: CharacterCardPro
       <div className="h-0.5 w-full" style={{ background: rc }} />
 
       {/* avatar */}
-      <div className="pt-5 pb-3 px-3 flex justify-center">
+      <div className="pt-5 pb-4 px-4 flex justify-center">
         <div
-          className={`w-24 h-24 flex items-center justify-center text-3xl font-bold text-white overflow-hidden ${character.avatarColor}`}
+          className={`w-32 h-32 flex items-center justify-center text-4xl font-bold text-white overflow-hidden ${character.avatarColor}`}
           style={{ border: `2px solid ${rc}55` }}
         >
           {character.avatarUrl
@@ -36,10 +36,10 @@ export function CharacterCard({ character, selected, onClick }: CharacterCardPro
       </div>
 
       {/* info */}
-      <div className="px-2 pb-3 flex flex-col gap-1 items-center">
-        <p className="text-px-text font-bold text-base leading-tight">{character.name}</p>
+      <div className="px-3 pb-4 flex flex-col gap-1.5 items-center">
+        <p className="text-px-text font-bold text-lg leading-tight">{character.name}</p>
         {character.title && (
-          <p className="text-px-dim text-xs italic leading-tight">{character.title}</p>
+          <p className="text-px-dim text-sm italic leading-tight">{character.title}</p>
         )}
         <div className="flex gap-1 flex-wrap justify-center mt-1">
           {character.classes.map(cls => (

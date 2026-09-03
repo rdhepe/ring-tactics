@@ -1,5 +1,6 @@
 // ─── Energy ─────────────────────────────────────────────────────────────────
 export type EnergyType = 'strength' | 'magic' | 'spirit' | 'agility' | 'random'
+export type CombatMode = 'precision' | 'chaos'
 
 export interface EnergyCost {
   strength?: number
@@ -24,6 +25,20 @@ export type EffectType =
   | 'energy_drain'
   | 'damage_boost'     // increases own damage output for N turns
   | 'damage_mark'      // per-target combo marker; value = accumulated bonus for next hit
+  | 'conditional_damage'
+  | 'counter_guard'
+  | 'damage_penalty'
+  | 'target_lock'
+  | 'attacked_target'
+  | 'setup_mode'
+  | 'consume_setup'
+  | 'skill_mark'
+  | 'consume_mark_stun'
+  | 'precision_mode'
+  | 'chaos_mode'
+  | 'marked_bonus_damage'
+  | 'consume_mark'
+  | 'self_damage'
 
 export type TargetType = 'enemy' | 'ally' | 'self' | 'all_enemies' | 'all_allies' | 'any'
 
@@ -41,12 +56,33 @@ export interface SkillEffect {
   stackIncrement?: number
   /** reset stackIncrement counter if skill is not used again within N turns */
   stackDecayTurns?: number
+  /** for energy_gain: fixed type to grant; omit for a random type */
+  energyType?: EnergyType
+  /** cap on the accumulated value for stacking effects like damage_mark */
+  maxValue?: number
+  /** for counter_guard: damage reflected to the attacker after mitigation */
+  counterDamage?: number
+  /** for marked_bonus_damage: remove the mark after applying the bonus */
+  consumeMark?: boolean
+}
+
+export interface SkillVariant {
+  name: string
+  description: string
+  iconUrl?: string
+  cost?: EnergyCost
+  cooldown?: number
+  targetType?: TargetType
+  mainClass?: SkillMainClass
+  persistence?: SkillPersistence
+  isAffliction?: boolean
+  effects: SkillEffect[]
 }
 
 // ─── Skill classes ───────────────────────────────────────────────────────────
 
 /** Main class determines what can be blocked/countered */
-export type SkillMainClass = 'physical' | 'magic' | 'strategic'
+export type SkillMainClass = 'physical' | 'technical' | 'magic' | 'strategic'
 
 /** Persistence type */
 export type SkillPersistence = 'instant' | 'action' | 'control'
@@ -66,6 +102,9 @@ export interface Skill {
   persistence: SkillPersistence
   isAffliction?: boolean     // if true, damage bypasses reduction AND destructible defense
   effects: SkillEffect[]
+  modeToggle?: boolean
+  modeVariants?: Partial<Record<CombatMode, SkillVariant>>
+  setupVariant?: SkillVariant
 }
 
 // ─── Character ───────────────────────────────────────────────────────────────
@@ -135,6 +174,10 @@ export interface BattleCharacter {
   skillUseCounts: Record<string, number>
   /** turn number when each skill last successfully landed */
   skillLastUsedTurn: Record<string, number>
+  /** offensive skill stored by The Echo; it returns to normal after this expires or is used */
+  copiedAttack?: { skill: Skill; expiresAtTurn: number }
+  /** turn in which Perfect Copy has already captured an attempted attack */
+  perfectCopyTriggeredTurn?: number
 }
 
 export type TeamId = 'player' | 'ai'
@@ -170,4 +213,6 @@ export interface BattleState {
   playerQueue: QueuedSkill[]
   aiQueue: QueuedSkill[]
   log: string[]
+  /** most recently executed skill that dealt damage */
+  lastOffensiveSkill?: Skill
 }

@@ -13,8 +13,8 @@ interface CharacterDetailProps {
 }
 
 export function CharacterDetail({ character, onSelect, selected, selectLabel = 'Add to Team' }: CharacterDetailProps) {
-  const [activeIdx, setActiveIdx] = useState<number | null>(null)
-  const active = activeIdx !== null ? character.skills[activeIdx] : null
+  const [activeIdx, setActiveIdx] = useState(0)
+  const active = character.skills[activeIdx]
   const rc = getRarityColor(character.rarity)
 
   return (
@@ -22,7 +22,7 @@ export function CharacterDetail({ character, onSelect, selected, selectLabel = '
       {/* header strip */}
       <div className="flex items-stretch gap-0" style={{ borderBottom: '2px solid #2e3755' }}>
         <div
-          className={`w-20 h-20 shrink-0 flex items-center justify-center text-3xl font-bold text-white overflow-hidden ${character.avatarColor}`}
+          className={`w-28 h-28 shrink-0 flex items-center justify-center text-4xl font-bold text-white overflow-hidden ${character.avatarColor}`}
           style={{ borderRight: `3px solid ${rc}` }}
         >
           {character.avatarUrl
@@ -77,18 +77,28 @@ export function CharacterDetail({ character, onSelect, selected, selectLabel = '
               key={skill.id}
               skill={skill}
               selected={activeIdx === i}
-              onClick={() => setActiveIdx(activeIdx === i ? null : i)}
+              onClick={() => setActiveIdx(i)}
             />
           ))}
         </div>
       </div>
 
       {/* expanded skill info */}
-      {active && (
-        <div className="mx-4 my-3 p-3" style={{ background: '#141726', border: '1px solid #2e3755', borderLeft: '3px solid #ffd166' }}>
-          <p className="font-bold text-px-gold text-sm uppercase tracking-wide mb-1">{active.name}</p>
-          <p className="text-px-muted text-xs leading-relaxed mb-2">{active.description}</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-2">
+      <div className="mx-4 my-4 overflow-hidden" style={{ background: '#0c0e1a', border: '1px solid #445180', borderTop: '4px solid #ffd166' }}>
+        <div className="relative w-full overflow-hidden" style={{ height: 220, background: '#090b16' }}>
+          {active.iconUrl ? (
+            <img src={active.iconUrl} alt={active.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-5xl font-bold text-px-gold">{active.name[0]}</div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 px-4 py-3"
+               style={{ background: 'linear-gradient(transparent, rgba(9,11,22,.96))' }}>
+            <p className="font-bold text-px-gold text-lg uppercase tracking-wide">{active.name}</p>
+          </div>
+        </div>
+        <div className="p-4">
+          <p className="text-px-muted text-sm leading-relaxed mb-4">{active.description}</p>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-2 mb-4">
             {[
               ['Target', active.targetType],
               ['Class', active.mainClass],
@@ -96,19 +106,19 @@ export function CharacterDetail({ character, onSelect, selected, selectLabel = '
               ['Cooldown', active.cooldown === 0 ? 'None' : `${active.cooldown} turns`],
             ].map(([k, v]) => (
               <div key={k} className="flex gap-2 items-baseline">
-                <span className="text-px-dim text-[9px] uppercase tracking-wider shrink-0" style={{ fontFamily: 'monospace' }}>{k}</span>
-                <span className="text-px-text text-[11px] font-bold capitalize">{v}</span>
+                <span className="text-px-dim text-[10px] uppercase tracking-wider shrink-0" style={{ fontFamily: 'monospace' }}>{k}</span>
+                <span className="text-px-text text-sm font-bold capitalize">{v}</span>
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-px-dim text-[9px] uppercase tracking-wider" style={{ fontFamily: 'monospace' }}>Cost</span>
-            <EnergyCostDisplay cost={active.cost} size="sm" />
+          <div className="flex items-center gap-3">
+            <span className="text-px-dim text-[10px] uppercase tracking-wider" style={{ fontFamily: 'monospace' }}>Cost</span>
+            <EnergyCostDisplay cost={active.cost} />
           </div>
           {active.effects.length > 0 && (
-            <div className="mt-2 pt-2" style={{ borderTop: '1px solid #2e3755' }}>
+            <div className="mt-4 pt-3 flex flex-col gap-1" style={{ borderTop: '1px solid #2e3755' }}>
               {active.effects.map((e, i) => (
-                <p key={i} className="text-xs text-px-muted">
+                <p key={i} className="text-sm text-px-muted">
                   <span className="text-px-gold font-bold capitalize">{e.type.replace(/_/g, ' ')}</span>
                   {' '}·{' '}{e.value}{e.duration > 1 ? ` for ${e.duration}t` : ''}
                   {e.stackIncrement ? `, +${e.stackIncrement}/use` : ''}
@@ -117,7 +127,7 @@ export function CharacterDetail({ character, onSelect, selected, selectLabel = '
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {/* select button */}
       {onSelect && (
