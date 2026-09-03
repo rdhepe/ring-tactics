@@ -214,5 +214,5 @@ export interface BattleState {
   aiQueue: QueuedSkill[]
   log: string[]
   /** most recently executed skill that dealt damage */
-  lastOffensiveSkill?: Skill
+  lastOffensiveSkill?: { skill: Skill; teamId: TeamId }
 }

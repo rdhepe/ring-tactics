@@ -402,7 +402,9 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
   if (!canAfford(skill.cost, actorTeam.energy)) { log.push(`${actor.character.name} can't afford ${skill.name}!`); return }
 
   if (actor.character.id === 'echo' && baseSkill.id === 'echo_s1') {
-    if (state.lastOffensiveSkill) storeCopiedAttack(actor, state.lastOffensiveSkill, state.turn, log)
+    if (state.lastOffensiveSkill && state.lastOffensiveSkill.teamId !== actorTeamId) {
+      storeCopiedAttack(actor, state.lastOffensiveSkill.skill, state.turn, log)
+    }
     else log.push(`${actor.character.name} has no offensive attack to copy.`)
   }
 
@@ -445,7 +447,7 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
   if (skill.cooldown > 0) actor.cooldowns[skill.id] = skill.cooldown + 1
   actor.skillUseCounts[skill.id] = (actor.skillUseCounts[skill.id] ?? 0) + 1
   actor.skillLastUsedTurn[skill.id] = state.turn
-  if (isOffensiveSkill(skill)) state.lastOffensiveSkill = structuredClone(skill)
+  if (isOffensiveSkill(skill)) state.lastOffensiveSkill = { skill: structuredClone(skill), teamId: actorTeamId }
   if (actor.character.id === 'echo' && baseSkill.id === 'echo_s2' && actor.copiedAttack) {
     delete actor.copiedAttack
     log.push(`${actor.character.name}'s copied attack fades.`)
