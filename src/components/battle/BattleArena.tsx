@@ -10,6 +10,7 @@ import type { BattleState, EnergyPool } from '../../types'
 import { getEffectiveSkill, isInvulnerable, isStunned, spendEnergy } from '../../engine/battle'
 import { EnergyAllocModal } from './EnergyAllocModal'
 import { BattleField } from './BattleField'
+import { BattleLogModal } from './TurnLog'
 
 const E_KEYS = ['strength', 'magic', 'spirit', 'agility'] as const
 
@@ -272,6 +273,7 @@ export function BattleArena() {
   const [timeLeft,     setTimeLeft]       = useState(TURN_SECS)
   const [summary, setSummary] = useState<{ turn: number; playerLines: string[]; aiLines: string[]; phase: 'player' | 'ai' } | null>(null)
   const [xpGained, setXpGained] = useState<number | null>(null)
+  const [logOpen, setLogOpen] = useState(false)
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastTurnRef = useRef(0)
 
@@ -536,6 +538,8 @@ export function BattleArena() {
         ))}
       </BattleField>
 
+      {logOpen && <BattleLogModal log={state.log} onClose={() => setLogOpen(false)} />}
+
       {/* wildcard energy allocation modal */}
       {pendingAlloc && (() => {
         const skill = findEffectiveSkill(pendingAlloc.charIdx, pendingAlloc.skillId)
@@ -571,8 +575,9 @@ export function BattleArena() {
       )}
 
       {/* energy placement matches player and ladder battles */}
-      <div className="px-4 py-2 shrink-0" style={{ borderTop: '1px solid #1d2235', background: '#090b16' }}>
+      <div className="px-4 py-2 shrink-0 flex items-center justify-between gap-3" style={{ borderTop: '1px solid #1d2235', background: '#090b16' }}>
         <EnergyBar pool={state.player.energy} label="ENERGY" />
+        <button type="button" onClick={() => setLogOpen(true)} className="shrink-0 px-3 py-1 text-xs font-bold uppercase tracking-widest" style={{ border: '1px solid #445180', background: '#141726', color: '#c8cfe8', fontFamily: 'monospace' }}>Battle Log</button>
       </div>
     </div>
   )

@@ -9,8 +9,16 @@ const EFFECT_ICON: Record<string, { icon: string; color: string }> = {
   damage_reduction:    { icon: '🔰', color: '#6b9ff5' },
   destructible_defense:{ icon: '🧱', color: '#8892b8' },
   damage_boost:        { icon: '🔥', color: '#f45e3f' },
+  next_damage_boost:   { icon: '↑', color: '#f45e3f' },
+  damage_penalty:      { icon: '↓', color: '#8892b8' },
   affliction:          { icon: '☠', color: '#a855f7' },
   heal:                { icon: '💚', color: '#38d9a9' },
+  domino_mark:         { icon: '●', color: '#f97316' },
+  heal_on_damage:      { icon: '✚', color: '#38d9a9' },
+  death_prevention:    { icon: '✦', color: '#ffd166' },
+  interference:        { icon: '⚠', color: '#6b9ff5' },
+  skill_cancel:        { icon: '×', color: '#f45e3f' },
+  play_dead_mark:      { icon: '◆', color: '#f45e3f' },
 }
 
 interface BattleCharSlotProps {

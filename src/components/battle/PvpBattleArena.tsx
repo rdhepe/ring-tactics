@@ -9,6 +9,7 @@ import { EnergyAllocModal } from './EnergyAllocModal'
 import type { BattleState, EnergyPool, QueuedSkill } from '../../types'
 import { getEffectiveSkill, isInvulnerable, isStunned, spendEnergy } from '../../engine/battle'
 import { BattleField } from './BattleField'
+import { BattleLogModal } from './TurnLog'
 
 const E_KEYS = ['strength', 'magic', 'spirit', 'agility'] as const
 const TURN_SECS = 60
@@ -66,6 +67,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
   const [pendingSkill, setPendingSkill] = useState<{ charIdx: number; skillId: string } | null>(null)
   const [pendingAlloc, setPendingAlloc] = useState<{ charIdx: number; skillId: string; targetTeam: 'player'|'ai'; targetIdx: number } | null>(null)
   const [summary, setSummary]           = useState<{ turn: number; playerLines: string[]; aiLines: string[]; phase: 'player'|'ai' } | null>(null)
+  const [logOpen, setLogOpen]           = useState(false)
   const lastTurnRef = useRef(0)
   const missionRecordedRef = useRef(false)
 
@@ -352,6 +354,8 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
         ))}
       </BattleField>
 
+      {logOpen && <BattleLogModal log={state.log} onClose={() => setLogOpen(false)} />}
+
       {/* ── Energy allocation modal ── */}
       {pendingAlloc && (() => {
         const skill = findEffectiveSkill(pendingAlloc.charIdx, pendingAlloc.skillId)
@@ -409,8 +413,9 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
       )}
 
       {/* ── Energy bar ── */}
-      <div className="px-4 py-2 shrink-0" style={{ borderTop: '1px solid #1d2235', background: '#090b16' }}>
+      <div className="px-4 py-2 shrink-0 flex items-center justify-between gap-3" style={{ borderTop: '1px solid #1d2235', background: '#090b16' }}>
         <EnergyBar pool={state.player.energy} label="ENERGY" />
+        <button type="button" onClick={() => setLogOpen(true)} className="shrink-0 px-3 py-1 text-xs font-bold uppercase tracking-widest" style={{ border: '1px solid #445180', background: '#141726', color: '#c8cfe8', fontFamily: 'monospace' }}>Battle Log</button>
       </div>
     </div>
   )

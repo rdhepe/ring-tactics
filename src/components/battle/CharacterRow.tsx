@@ -12,9 +12,17 @@ const EFFECT_BADGE: Record<string, { icon: string; color: string }> = {
   damage_reduction:    { icon: '🔰', color: '#6b9ff5' },
   destructible_defense:{ icon: '🧱', color: '#8892b8' },
   damage_boost:        { icon: '🔥', color: '#f45e3f' },
+  next_damage_boost:   { icon: '↑', color: '#f45e3f' },
+  damage_penalty:      { icon: '↓', color: '#8892b8' },
   affliction:          { icon: '☠', color: '#a855f7' },
   setup_mode:          { icon: '⚙', color: '#6b9ff5' },
   skill_mark:          { icon: '◆', color: '#ffd166' },
+  domino_mark:         { icon: '●', color: '#f97316' },
+  heal_on_damage:      { icon: '✚', color: '#38d9a9' },
+  death_prevention:    { icon: '✦', color: '#ffd166' },
+  interference:        { icon: '⚠', color: '#6b9ff5' },
+  skill_cancel:        { icon: '×', color: '#f45e3f' },
+  play_dead_mark:      { icon: '◆', color: '#f45e3f' },
   precision_mode:      { icon: 'P', color: '#38d9a9' },
   chaos_mode:          { icon: 'C', color: '#f45e3f' },
 }
@@ -327,8 +335,16 @@ const EFFECT_LABEL: Record<string, string> = {
   damage_reduction:    'Damage Reduction',
   destructible_defense:'Destructible Shield',
   damage_boost:        'Damage Boost',
+  next_damage_boost:   'Next Attack Boost',
+  damage_penalty:      'Next Attack Penalty',
   affliction:          'Affliction',
   skill_mark:          'Marked',
+  domino_mark:         'Domino Mark',
+  heal_on_damage:      'Healing Ready',
+  death_prevention:    'Second Chance',
+  interference:        'Interference',
+  skill_cancel:        'Skill Cancelled',
+  play_dead_mark:      'Play Dead Mark',
   precision_mode:      'Precision Mode',
   chaos_mode:          'Chaos Mode',
 }
@@ -408,6 +424,14 @@ function CastSkillBadge({ skillId, charId, effects, index, markCount, side }: {
               const valueStr = ae.effect.type === 'damage_reduction'    ? `Reduces damage by ${ae.effect.value}`
                              : ae.effect.type === 'destructible_defense' ? `Shield: ${ae.effect.value} remaining`
                              : ae.effect.type === 'damage_boost'        ? `+${ae.effect.value} to all attacks`
+                             : ae.effect.type === 'next_damage_boost'   ? `+${ae.effect.value} on the next damaging attack`
+                             : ae.effect.type === 'damage_penalty'      ? `-${ae.effect.value} on the next damaging attack`
+                             : ae.effect.type === 'domino_mark'         ? `Next hit deals +${ae.effect.value} damage, then this mark ends`
+                             : ae.effect.type === 'heal_on_damage'      ? `Heals ${ae.effect.value} after the next successful hit`
+                             : ae.effect.type === 'death_prevention'    ? `Survives the next lethal hit at ${ae.effect.value} HP`
+                             : ae.effect.type === 'interference'        ? `Takes ${ae.effect.value} damage after the next successful hit`
+                             : ae.effect.type === 'skill_cancel'        ? 'Next queued skill is cancelled'
+                             : ae.effect.type === 'play_dead_mark'      ? `Next hit taken deals +${ae.effect.value} damage`
                              : ae.effect.type === 'stun'                ? 'Cannot act'
                              : ae.effect.type === 'invulnerable'        ? 'Cannot be targeted'
                              : null

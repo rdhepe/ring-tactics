@@ -2,24 +2,16 @@ import { useState } from 'react'
 import { CharacterCard } from '../components/characters/CharacterCard'
 import { CharacterDetail } from '../components/characters/CharacterDetail'
 import { ALL_CHARACTERS } from '../data/characters'
-import type { Character, CharacterClass, CharacterRarity } from '../types'
-
-const RARITY_ORDER: CharacterRarity[] = ['common', 'uncommon', 'rare', 'legendary']
-const RARITY_LABELS: Record<CharacterRarity, string> = { common: 'Rookie', uncommon: 'Veteran', rare: 'Champion', legendary: 'Legend' }
-const ALL_CLASSES: CharacterClass[] = ['brawler', 'high-flyer', 'submission', 'cornerman', 'monster', 'technician']
+import type { Character } from '../types'
 
 export function CharactersPage() {
   const [selected, setSelected]       = useState<Character | null>(ALL_CHARACTERS[0])
-  const [filterClass, setFilterClass] = useState<CharacterClass | 'all'>('all')
-  const [filterRarity, setFilterRarity] = useState<CharacterRarity | 'all'>('all')
   const [search, setSearch]           = useState('')
 
   const filtered = ALL_CHARACTERS.filter(c => {
-    const mc = filterClass  === 'all' || c.classes.includes(filterClass)
-    const mr = filterRarity === 'all' || c.rarity === filterRarity
     const ms = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.title?.toLowerCase().includes(search.toLowerCase())
-    return mc && mr && ms
-  }).sort((a, b) => RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity))
+    return ms
+  })
 
   return (
     <div className="arena-page min-h-screen bg-px-base text-px-text">
@@ -38,18 +30,6 @@ export function CharactersPage() {
           <input type="text" placeholder="Search roster…" value={search} onChange={e => setSearch(e.target.value)}
                  className="bg-px-surface text-px-text placeholder-px-dim text-sm px-3 py-1.5 outline-none w-40"
                  style={{ border: '1px solid #2e3755', fontFamily: 'inherit' }} />
-          <select value={filterClass} onChange={e => setFilterClass(e.target.value as CharacterClass | 'all')}
-                  className="bg-px-surface text-px-text text-sm px-3 py-1.5 outline-none capitalize"
-                  style={{ border: '1px solid #2e3755', fontFamily: 'inherit' }}>
-            <option value="all">All Styles</option>
-            {ALL_CLASSES.map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
-          </select>
-          <select value={filterRarity} onChange={e => setFilterRarity(e.target.value as CharacterRarity | 'all')}
-                  className="bg-px-surface text-px-text text-sm px-3 py-1.5 outline-none capitalize"
-                  style={{ border: '1px solid #2e3755', fontFamily: 'inherit' }}>
-            <option value="all">All Ranks</option>
-            {RARITY_ORDER.map(r => <option key={r} value={r}>{RARITY_LABELS[r]}</option>)}
-          </select>
         </div>
       </div>
 

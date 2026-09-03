@@ -41,14 +41,6 @@ export function CharacterCard({ character, selected, onClick }: CharacterCardPro
         {character.title && (
           <p className="text-px-dim text-sm italic leading-tight">{character.title}</p>
         )}
-        <div className="flex gap-1 flex-wrap justify-center mt-1">
-          {character.classes.map(cls => (
-            <span key={cls} className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5"
-                  style={{ background: '#1d2235', color: '#8892b8', border: '1px solid #2e3755', fontFamily: 'monospace' }}>
-              {cls}
-            </span>
-          ))}
-        </div>
       </div>
 
       {selected && (

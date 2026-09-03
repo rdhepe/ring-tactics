@@ -39,6 +39,17 @@ export type EffectType =
   | 'marked_bonus_damage'
   | 'consume_mark'
   | 'self_damage'
+  | 'conditional_damaged_this_round'
+  | 'damaged_this_round'
+  | 'domino_mark'
+  | 'heal_on_damage'
+  | 'conditional_heal_below_half'
+  | 'death_prevention'
+  | 'next_damage_boost'
+  | 'play_dead_mark'
+  | 'conditional_used_skill_this_round'
+  | 'skill_cancel'
+  | 'interference'
 
 export type TargetType = 'enemy' | 'ally' | 'self' | 'all_enemies' | 'all_allies' | 'any'
 
@@ -64,6 +75,8 @@ export interface SkillEffect {
   counterDamage?: number
   /** for marked_bonus_damage: remove the mark after applying the bonus */
   consumeMark?: boolean
+  /** bonus added when conditional_heal_below_half targets an ally below 50% HP */
+  lowHealthBonus?: number
 }
 
 export interface SkillVariant {

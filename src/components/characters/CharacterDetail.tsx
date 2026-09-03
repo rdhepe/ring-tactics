@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Character } from '../../types'
-import { getRarityColor, RarityBadge } from '../ui/RarityBadge'
+import { getRarityColor } from '../ui/RarityBadge'
 import { SkillCard } from '../ui/SkillCard'
 import { EnergyCostDisplay } from '../ui/EnergyOrb'
 import { HPBar } from '../ui/HPBar'
@@ -31,23 +31,12 @@ export function CharacterDetail({ character, onSelect, selected, selectLabel = '
           }
         </div>
         <div className="flex-1 px-4 py-3 flex flex-col justify-center gap-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-px-text font-bold text-lg uppercase tracking-wider leading-none">
-              {character.name}
-            </h2>
-            <RarityBadge rarity={character.rarity} />
-          </div>
+          <h2 className="text-px-text font-bold text-lg uppercase tracking-wider leading-none">
+            {character.name}
+          </h2>
           {character.title && (
             <p className="text-px-muted text-xs italic">{character.title}</p>
           )}
-          <div className="flex gap-1 flex-wrap mt-0.5">
-            {character.classes.map(cls => (
-              <span key={cls} className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5"
-                    style={{ background: '#1d2235', color: '#8892b8', border: '1px solid #2e3755', fontFamily: 'monospace' }}>
-                {cls}
-              </span>
-            ))}
-          </div>
         </div>
       </div>
 

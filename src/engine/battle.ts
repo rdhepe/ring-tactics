@@ -100,7 +100,16 @@ export function getCombatMode(char: BattleCharacter): CombatMode {
 export function getEffectiveSkill(char: BattleCharacter, skill: Skill): Skill {
   if (char.character.id === 'echo' && skill.id === 'echo_s2' && char.copiedAttack) {
     const copied = char.copiedAttack.skill
-    return { ...skill, ...copied, id: skill.id, cost: skill.cost, cooldown: skill.cooldown, iconColor: skill.iconColor }
+    return {
+      ...skill,
+      ...copied,
+      id: skill.id,
+      name: `Echo Strike: ${copied.name}`,
+      description: `Copied ${copied.name}. Its damage is reduced to 80% of the original.`,
+      cost: skill.cost,
+      cooldown: skill.cooldown,
+      iconColor: skill.iconColor,
+    }
   }
   const variant = skill.modeVariants?.[getCombatMode(char)] ?? (isInSetupMode(char) ? skill.setupVariant : undefined)
   if (!variant) return skill
@@ -151,7 +160,9 @@ function getDR(char: BattleCharacter): number {
 }
 
 function getDmgBoost(char: BattleCharacter): number {
-  return char.activeEffects.filter(ae => ae.effect.type === 'damage_boost').reduce((s, ae) => s + ae.effect.value, 0)
+  return char.activeEffects
+    .filter(ae => ae.effect.type === 'damage_boost' || ae.effect.type === 'next_damage_boost')
+    .reduce((s, ae) => s + ae.effect.value, 0)
 }
 
 function getDmgPenalty(char: BattleCharacter): number {
@@ -218,7 +229,10 @@ function applyDmg(
   attacker?: BattleCharacter,
   log?: string[],
 ): number {
-  let dmg = raw
+  const markIndex = char.activeEffects.findIndex(effect => effect.effect.type === 'play_dead_mark')
+  const markBonus = markIndex === -1 ? 0 : char.activeEffects.splice(markIndex, 1)[0].effect.value
+  let dmg = raw + markBonus
+  if (markBonus > 0) log?.push(`${char.character.name}'s Play Dead mark adds ${markBonus} damage.`)
   if (attacker) {
     const counterGuard = consumeFirstEffect(char, 'counter_guard')
     if (counterGuard) {
@@ -234,6 +248,7 @@ function applyDmg(
   }
   if (dtype === 'affliction') {
     char.hp = Math.max(0, char.hp - dmg)
+    preventLethalDamage(char, log)
     return dmg
   }
   if (dtype === 'normal') dmg = Math.max(0, dmg - getDR(char))
@@ -247,13 +262,14 @@ function applyDmg(
   }
   char.activeEffects = char.activeEffects.filter(ae => ae.effect.type !== 'destructible_defense' || ae.effect.value > 0)
   char.hp = Math.max(0, char.hp - Math.max(0, dmg))
+  preventLethalDamage(char, log)
   return Math.max(0, dmg)
 }
 
 // ─── Effect application ───────────────────────────────────────────────────────
 
 // passive status effect types — listed here so addActiveEffect can reference them
-const PASSIVE_TYPES = new Set(['stun', 'invulnerable', 'damage_reduction', 'destructible_defense', 'damage_boost', 'damage_mark', 'counter_guard', 'damage_penalty', 'target_lock', 'attacked_target', 'setup_mode', 'skill_mark', 'precision_mode', 'chaos_mode'])
+const PASSIVE_TYPES = new Set(['stun', 'invulnerable', 'damage_reduction', 'destructible_defense', 'damage_boost', 'damage_mark', 'counter_guard', 'damage_penalty', 'target_lock', 'attacked_target', 'setup_mode', 'skill_mark', 'precision_mode', 'chaos_mode', 'damaged_this_round', 'domino_mark', 'heal_on_damage', 'death_prevention', 'next_damage_boost', 'play_dead_mark', 'skill_cancel', 'interference'])
 
 function addActiveEffect(char: BattleCharacter, skillId: string, charId: string, effect: SkillEffect): void {
   const key = `${effect.type}_${skillId}` as ActiveEffect['key']
@@ -261,6 +277,74 @@ function addActiveEffect(char: BattleCharacter, skillId: string, charId: string,
   // +1 so passive effects survive the end-of-turn tick and last the full declared duration
   const turnsLeft = PASSIVE_TYPES.has(effect.type) ? effect.duration + 1 : effect.duration
   char.activeEffects.push({ key, sourceSkillId: skillId, sourceCharacterId: charId, effect: { ...effect }, turnsLeft, stacks: 1 })
+}
+
+function preventLethalDamage(char: BattleCharacter, log?: string[]): void {
+  if (char.hp > 0) return
+  const index = char.activeEffects.findIndex(effect => effect.effect.type === 'death_prevention')
+  if (index === -1) return
+  const [prevention] = char.activeEffects.splice(index, 1)
+  char.hp = prevention.effect.value
+  log?.push(`${char.character.name} uses Second Chance and survives at ${char.hp} HP.`)
+}
+
+function markPlayDeadAttacker(attacker: BattleCharacter, defender: BattleCharacter, log: string[]): void {
+  if (!defender.activeEffects.some(effect => effect.sourceSkillId === 'velvetvow_s4' && effect.effect.type === 'invulnerable')) return
+  addActiveEffect(attacker, 'velvetvow_s4_mark', defender.character.id, { type: 'play_dead_mark', value: 10, duration: 1 })
+  log.push(`${attacker.character.name} is marked by ${defender.character.name}'s Play Dead.`)
+}
+
+function grantFadeOutPenalty(attacker: BattleCharacter, defender: BattleCharacter, log: string[]): void {
+  if (!defender.activeEffects.some(effect => effect.sourceSkillId === 'blackout_s4' && effect.effect.type === 'invulnerable')) return
+  addActiveEffect(attacker, 'blackout_s4_penalty', defender.character.id, { type: 'damage_penalty', value: 10, duration: 2 })
+  log.push(`${attacker.character.name}'s next damaging attack deals 10 less damage.`)
+}
+
+function handleSuccessfulDamage(
+  actor: BattleCharacter,
+  target: BattleCharacter,
+  amount: number,
+  log: string[],
+): void {
+  if (amount <= 0) return
+
+  target.activeEffects = target.activeEffects.filter(effect => effect.effect.type !== 'damaged_this_round')
+  target.activeEffects.push({
+    key: 'damaged_this_round_damage_memory',
+    sourceSkillId: 'damage_memory',
+    sourceCharacterId: actor.character.id,
+    effect: { type: 'damaged_this_round', value: 1, duration: 1 },
+    turnsLeft: 1,
+    stacks: 1,
+  })
+
+  const dominoIndex = target.activeEffects.findIndex(effect => effect.effect.type === 'domino_mark')
+  if (dominoIndex !== -1) {
+    const [domino] = target.activeEffects.splice(dominoIndex, 1)
+    const bonus = applyDmg(target, domino.effect.value, 'normal', actor, log)
+    log.push(`${target.character.name}'s Domino Mark triggers for ${bonus} damage.`)
+  }
+
+  const healIndex = actor.activeEffects.findIndex(effect => effect.effect.type === 'heal_on_damage')
+  if (healIndex !== -1) {
+    const [heal] = actor.activeEffects.splice(healIndex, 1)
+    const before = actor.hp
+    actor.hp = Math.min(actor.maxHp, actor.hp + heal.effect.value)
+    log.push(`${actor.character.name} keeps it going and heals ${actor.hp - before} HP.`)
+  }
+
+  const interferenceIndex = actor.activeEffects.findIndex(effect => effect.effect.type === 'interference')
+  if (interferenceIndex !== -1) {
+    const [interference] = actor.activeEffects.splice(interferenceIndex, 1)
+    const retaliation = applyDmg(actor, interference.effect.value, 'normal')
+    log.push(`Blackout interferes and deals ${retaliation} damage to ${actor.character.name}.`)
+  }
+}
+
+function grantCounterstepBonus(char: BattleCharacter, log: string[]): void {
+  if (!char.activeEffects.some(effect => effect.sourceSkillId === 'breakpoint_s4' && effect.effect.type === 'invulnerable')) return
+  addActiveEffect(char, 'breakpoint_s4_bonus', char.character.id, { type: 'next_damage_boost', value: 10, duration: 2, target: 'self' })
+  log.push(`${char.character.name} sidesteps the attack and gains +10 damage on the next hit.`)
 }
 
 function applyInstant(
@@ -277,24 +361,30 @@ function applyInstant(
   switch (effect.type) {
     case 'damage': {
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
-      applyDmg(target, amount, 'normal', actor, log)
+      const dealt = applyDmg(target, amount, 'normal', actor, log)
+      handleSuccessfulDamage(actor, target, dealt, log)
       consumeFirstEffect(actor, 'damage_penalty')
+      if (dealt > 0) consumeFirstEffect(actor, 'next_damage_boost')
       rememberAttack(actor, target)
       log.push(`${aName} deals ${amount} dmg to ${tName}`)
       break
     }
     case 'pierce_damage': {
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
-      applyDmg(target, amount, 'pierce', actor, log)
+      const dealt = applyDmg(target, amount, 'pierce', actor, log)
+      handleSuccessfulDamage(actor, target, dealt, log)
       consumeFirstEffect(actor, 'damage_penalty')
+      if (dealt > 0) consumeFirstEffect(actor, 'next_damage_boost')
       rememberAttack(actor, target)
       log.push(`${aName} pierces ${tName} for ${amount} dmg`)
       break
     }
     case 'affliction': {
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
-      applyDmg(target, amount, 'affliction', actor, log)
+      const dealt = applyDmg(target, amount, 'affliction', actor, log)
+      handleSuccessfulDamage(actor, target, dealt, log)
       consumeFirstEffect(actor, 'damage_penalty')
+      if (dealt > 0) consumeFirstEffect(actor, 'next_damage_boost')
       rememberAttack(actor, target)
       log.push(`${aName} afflicts ${tName} for ${amount}`)
       break
@@ -305,6 +395,31 @@ function applyInstant(
       applyDmg(target, amount, 'normal', actor, log)
       consumeFirstEffect(actor, 'damage_penalty')
       log.push(`${aName} counters ${tName} for ${amount} bonus damage`)
+      break
+    }
+    case 'conditional_damaged_this_round': {
+      if (!target.activeEffects.some(active => active.effect.type === 'damaged_this_round')) break
+      const amount = Math.max(0, effect.value + boost - outgoingPenalty)
+      const dealt = applyDmg(target, amount, 'normal', actor, log)
+      handleSuccessfulDamage(actor, target, dealt, log)
+      consumeFirstEffect(actor, 'damage_penalty')
+      log.push(`${aName} follows up on ${tName} for ${amount} bonus damage`)
+      break
+    }
+    case 'conditional_used_skill_this_round': {
+      if (!Object.values(target.skillLastUsedTurn).some(turn => turn === actor.skillLastUsedTurn[skillId])) break
+      const amount = Math.max(0, effect.value + boost - outgoingPenalty)
+      const dealt = applyDmg(target, amount, 'normal', actor, log)
+      handleSuccessfulDamage(actor, target, dealt, log)
+      consumeFirstEffect(actor, 'damage_penalty')
+      log.push(`${aName} catches ${tName} off rhythm for ${amount} bonus damage`)
+      break
+    }
+    case 'conditional_heal_below_half': {
+      const amount = effect.value + (target.hp < target.maxHp / 2 ? effect.lowHealthBonus ?? 0 : 0)
+      const before = target.hp
+      target.hp = Math.min(target.maxHp, target.hp + amount)
+      log.push(`${aName} rallies ${tName} for ${target.hp - before} HP`)
       break
     }
     case 'marked_bonus_damage': {
@@ -383,7 +498,7 @@ function resolveTargets(
 // ─── Skill execution ──────────────────────────────────────────────────────────
 
 // immediate effect types for instant skills
-const INSTANT_TYPES = new Set(['damage', 'pierce_damage', 'affliction', 'conditional_damage', 'marked_bonus_damage', 'consume_mark', 'consume_mark_stun', 'consume_setup', 'self_damage', 'heal', 'energy_gain', 'energy_drain'])
+const INSTANT_TYPES = new Set(['damage', 'pierce_damage', 'affliction', 'conditional_damage', 'conditional_damaged_this_round', 'conditional_used_skill_this_round', 'conditional_heal_below_half', 'marked_bonus_damage', 'consume_mark', 'consume_mark_stun', 'consume_setup', 'self_damage', 'heal', 'energy_gain', 'energy_drain'])
 
 export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, actorTeamId: TeamId, log: string[]): void {
   const actorTeam = actorTeamId === 'player' ? state.player : state.ai
@@ -398,6 +513,10 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
   const skill = getEffectiveSkill(actor, baseSkill)
 
   if (isStunned(actor)) { log.push(`${actor.character.name} is stunned!`); return }
+  if (consumeFirstEffect(actor, 'skill_cancel')) {
+    log.push(`${actor.character.name}'s ${skill.name} is cancelled!`)
+    return
+  }
   if ((actor.cooldowns[skill.id] ?? 0) > 0) { log.push(`${actor.character.name}'s ${skill.name} is on cooldown!`); return }
   if (!canAfford(skill.cost, actorTeam.energy)) { log.push(`${actor.character.name} can't afford ${skill.name}!`); return }
 
@@ -424,6 +543,15 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
   const primaryTarget = targetTeam.characters[targetIndex]
 
   if (skill.targetType === 'all_enemies' && isOffensiveSkill(skill)) {
+    const protectedBreakpoint = enemyTeam.characters.find(char =>
+      char.character.id === 'breakpoint' && isInvulnerable(char))
+    if (protectedBreakpoint) grantCounterstepBonus(protectedBreakpoint, log)
+    for (const protectedBlackout of enemyTeam.characters.filter(char => char.character.id === 'blackout' && isInvulnerable(char))) {
+      grantFadeOutPenalty(actor, protectedBlackout, log)
+    }
+    for (const protectedVelvet of enemyTeam.characters.filter(char => char.character.id === 'velvetvow' && isInvulnerable(char))) {
+      markPlayDeadAttacker(actor, protectedVelvet, log)
+    }
     const protectedEcho = enemyTeam.characters.find(char =>
       char.character.id === 'echo' && isInvulnerable(char) && char.perfectCopyTriggeredTurn !== state.turn)
     if (protectedEcho) {
@@ -435,6 +563,9 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
   // For single-enemy skills, bail if invulnerable
   if (isEnemyTarget && primaryTarget && isInvulnerable(primaryTarget)
     && (skill.targetType === 'enemy' || skill.targetType === 'any')) {
+    if (primaryTarget.character.id === 'breakpoint' && isOffensiveSkill(skill)) grantCounterstepBonus(primaryTarget, log)
+    if (primaryTarget.character.id === 'blackout' && isOffensiveSkill(skill)) grantFadeOutPenalty(actor, primaryTarget, log)
+    if (primaryTarget.character.id === 'velvetvow' && isOffensiveSkill(skill)) markPlayDeadAttacker(actor, primaryTarget, log)
     if (primaryTarget.character.id === 'echo' && primaryTarget.perfectCopyTriggeredTurn !== state.turn && isOffensiveSkill(skill)) {
       storeCopiedAttack(primaryTarget, skill, state.turn, log)
       primaryTarget.perfectCopyTriggeredTurn = state.turn

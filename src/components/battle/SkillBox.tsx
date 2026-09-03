@@ -79,7 +79,7 @@ export function SkillBox({ skill, battleChar, pool, isQueued, isPending, clickab
         if (opening && wrapRef.current) {
           const rect = wrapRef.current.getBoundingClientRect()
           // flip upward if the enlarged tooltip would not fit below
-          setTipAbove(window.innerHeight - rect.bottom < 340)
+          setTipAbove(window.innerHeight - rect.bottom < 420)
         }
         setTipVisible(v => !v)
         if (opening) window.dispatchEvent(new CustomEvent('skillbox-tip-open', { detail: skill.id }))
@@ -96,7 +96,7 @@ export function SkillBox({ skill, battleChar, pool, isQueued, isPending, clickab
               : { top: '100%',    marginTop: 6 }),
             left: '50%',
             transform: 'translateX(-50%)',
-            width: 280,
+            width: 360,
             background: '#0c0e1a',
             border: `1px solid ${accent}66`,
             borderLeft: `3px solid ${accent}`,
@@ -107,43 +107,43 @@ export function SkillBox({ skill, battleChar, pool, isQueued, isPending, clickab
           }}
         >
           {/* header */}
-          <div className="px-3 py-2 flex items-center gap-3"
+          <div className="px-4 py-3 flex items-center gap-3"
                style={{ background: accent + '22', borderBottom: `1px solid ${accent}33` }}>
             {skill.iconUrl && (
               <img src={skill.iconUrl} alt=""
-                   style={{ width: 32, height: 32, objectFit: 'cover', flexShrink: 0 }} />
+                   style={{ width: 44, height: 44, objectFit: 'cover', flexShrink: 0 }} />
             )}
             <span className="font-bold truncate"
-                  style={{ color: accent, fontFamily: "'Press Start 2P', monospace", fontSize: 10 }}>
+                  style={{ color: accent, fontFamily: "'Press Start 2P', monospace", fontSize: 12 }}>
               {skill.name.toUpperCase()}
             </span>
           </div>
           {/* description */}
-          <p className="px-3 py-3 text-px-muted leading-snug" style={{ fontSize: 12 }}>
+          <p className="px-4 py-4 text-px-muted leading-snug" style={{ fontSize: 14 }}>
             {skill.description}
           </p>
           {/* cost */}
-          <div className="px-3 pb-3 flex items-center gap-3"
+          <div className="px-4 pb-4 flex items-center gap-3"
                style={{ borderBottom: '1px solid #1d2235' }}>
-            <span style={{ fontSize: 10, color: '#4a5578', fontFamily: 'monospace' }}>COST</span>
+            <span style={{ fontSize: 11, color: '#4a5578', fontFamily: 'monospace' }}>COST</span>
             <EnergyCostDisplay cost={skill.cost} size="sm" />
           </div>
           {/* meta */}
-          <div className="px-3 pb-3 flex flex-wrap gap-x-4 gap-y-1"
-               style={{ borderTop: '1px solid #1d2235', paddingTop: 4 }}>
-            <span style={{ fontSize: 10, color: accent, fontFamily: 'monospace', textTransform: 'uppercase' }}>
+          <div className="px-4 pb-4 flex flex-wrap gap-x-4 gap-y-1"
+               style={{ borderTop: '1px solid #1d2235', paddingTop: 8 }}>
+            <span style={{ fontSize: 11, color: accent, fontFamily: 'monospace', textTransform: 'uppercase' }}>
               {skill.mainClass}
             </span>
-            <span style={{ fontSize: 10, color: '#8892b8', fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 11, color: '#8892b8', fontFamily: 'monospace' }}>
               {skill.persistence}
             </span>
             {skill.cooldown > 0 && (
-              <span style={{ fontSize: 10, color: '#ffd166', fontFamily: 'monospace' }}>
+              <span style={{ fontSize: 11, color: '#ffd166', fontFamily: 'monospace' }}>
                 CD: {skill.cooldown}
               </span>
             )}
             {skill.isAffliction && (
-              <span style={{ fontSize: 10, color: '#a855f7', fontFamily: 'monospace' }}>Affliction</span>
+              <span style={{ fontSize: 11, color: '#a855f7', fontFamily: 'monospace' }}>Affliction</span>
             )}
           </div>
         </div>
