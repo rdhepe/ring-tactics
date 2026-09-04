@@ -7,12 +7,25 @@ import type { Character } from '../types'
 
 // ─── Screens ──────────────────────────────────────────────────────────────────
 
-function SearchingScreen({ status, onCancel }: { status: string; onCancel: () => void }) {
+function SearchingScreen({ status, onCancel, isSearching }: { status: string; onCancel: () => void; isSearching: boolean }) {
   const [dots, setDots] = useState('')
+  const [elapsed, setElapsed] = useState(0)
+
   useEffect(() => {
     const id = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    if (!isSearching) { setElapsed(0); return }
+    setElapsed(0)
+    const id = setInterval(() => setElapsed(s => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [isSearching])
+
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0')
+  const ss = String(elapsed % 60).padStart(2, '0')
+
   return (
     <div className="arena-page arena-stage arena-center-state min-h-screen bg-px-base text-px-text flex items-center justify-center">
       <div className="arena-panel arena-panel-yellow flex flex-col items-center gap-8 text-center px-8 py-8">
@@ -23,6 +36,11 @@ function SearchingScreen({ status, onCancel }: { status: string; onCancel: () =>
           <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#8892b8', minWidth: 220 }}>
             {status}{dots}
           </p>
+          {isSearching && (
+            <p style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 16, color: '#ffd166', marginTop: 10 }}>
+              {mm}:{ss}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           {[0, 1, 2].map(i => (
@@ -126,6 +144,7 @@ export function LadderPage() {
   return (
     <SearchingScreen
       status={statusText}
+      isSearching={pvpPhase === 'searching'}
       onCancel={pvpPhase === 'searching' ? () => { cancelSearch(); navigate('/battle') } : () => navigate('/battle')}
     />
   )

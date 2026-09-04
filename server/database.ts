@@ -150,6 +150,39 @@ export async function createUser(username: string, passwordHash: string, email: 
   }
 }
 
+/** Creates the fixed set of bot accounts on first boot (idempotent) and returns them. No email/login — used only as ladder matchmaking fallback opponents. */
+export async function ensureBotUsers(usernames: string[], passwordHash: string): Promise<AuthenticatedUser[]> {
+  for (const username of usernames) {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const id = randomUUID()
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO users (id, username, username_normalized, password_hash, email_verified)
+         VALUES ($1, $2, $3, $4, true)
+         ON CONFLICT (username_normalized) DO NOTHING
+         RETURNING id`,
+        [id, username, normalizeUsername(username), passwordHash],
+      )
+      if (inserted.rows[0]) {
+        await client.query('INSERT INTO player_stats (user_id) VALUES ($1)', [inserted.rows[0].id])
+        await client.query('INSERT INTO wallets (user_id) VALUES ($1)', [inserted.rows[0].id])
+      }
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  }
+  const result = await pool.query<AuthenticatedUser>(
+    'SELECT id, username FROM users WHERE username_normalized = ANY($1)',
+    [usernames.map(normalizeUsername)],
+  )
+  return result.rows
+}
+
 function hashSessionToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
 }

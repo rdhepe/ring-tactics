@@ -13,10 +13,11 @@ import { rateLimit } from 'express-rate-limit'
 import { parseCookie } from 'cookie'
 import { z } from 'zod'
 import Razorpay from 'razorpay'
-import { initBattle, resolveSinglePlayerTurn, switchCombatMode } from '../src/engine/battle.js'
+import { initBattle, resolveSinglePlayerTurn, switchCombatMode, buildAIQueue } from '../src/engine/battle.js'
 import type { BattleState, Character, QueuedSkill, BattlePhase, TeamId } from '../src/types/index.js'
 import { DIAMOND_PACKAGES, UNLOCK_COST, FREE_RARITIES, COINS_PER_LADDER_WIN } from '../src/data/economy.js'
 import { CHARACTER_RARITY } from '../src/data/characterRarities.js'
+import { pickRandomBotTeam } from '../src/data/botRoster.js'
 import {
   createSession,
   createDiamondOrder,
@@ -26,6 +27,7 @@ import {
   creditCoins,
   deleteExpiredSessions,
   deleteSession,
+  ensureBotUsers,
   findUserByUsername,
   getDiamondOrder,
   getDiamondOrderHistory,
@@ -153,14 +155,31 @@ interface Room {
   turnTimer: ReturnType<typeof setTimeout> | null
   resultRecorded: boolean
   isLadder: boolean
+  /** Slot played by a bot (matchmaking fallback), if any. Bots always fill p2. */
+  botSlot: 'p1' | 'p2' | null
 }
 
-// ─── State ────────────────────────────────────────────────────────────────────
+// ─── State ──────────────────────────────────────────────────────
 
 const rooms = new Map<string, Room>()
 const socketToRoom = new Map<string, string>()
 const socketToUser = new Map<string, AuthenticatedUser>()
 const matchQueue: string[] = []  // socket IDs waiting for an auto-match
+
+// Human-sounding names so a bot fallback opponent is indistinguishable from a real player.
+const BOT_USERNAMES = [
+  'JordanK_92', 'AlexeiRex', 'MikeThunder', 'SarahV', 'TommyRage',
+  'DiegoWolf', 'PriyaStorm', 'ChrisIronfist', 'NadiaBlaze', 'LeoGrappler',
+]
+let BOT_USERS: AuthenticatedUser[] = []
+const botFallbackTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const MATCHMAKING_BOT_FALLBACK_MIN_MS = 45_000
+const MATCHMAKING_BOT_FALLBACK_JITTER_MS = 15_000 // randomized on top of the 45s minimum
+
+function clearBotFallback(socketId: string) {
+  const timer = botFallbackTimers.get(socketId)
+  if (timer) { clearTimeout(timer); botFallbackTimers.delete(socketId) }
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -214,17 +233,31 @@ function startTurn(io: Server, room: Room) {
   clearTimer(room)
   const active = room.activeSlot === 'p1' ? room.p1 : room.p2
   const other  = room.activeSlot === 'p1' ? room.p2 : room.p1
+
+  if (room.botSlot && room.activeSlot === room.botSlot) {
+    // Bot's turn — "think" for a few seconds instead of acting instantly, so it feels human.
+    if (other) io.to(other.socketId).emit('opponents_turn', {})
+    const thinkMs = 1800 + Math.random() * 3200
+    room.turnTimer = setTimeout(() => {
+      if (!room.state) return
+      void executeTurn(io, room, buildAIQueue(room.state), { raw: true })
+    }, thinkMs)
+    return
+  }
+
   if (active) io.to(active.socketId).emit('your_turn',     { timeLeft: TURN_SECS })
   if (other)  io.to(other.socketId).emit('opponents_turn', {})
   room.turnTimer = setTimeout(() => void executeTurn(io, room, []), TURN_SECS * 1000)
 }
 
-async function executeTurn(io: Server, room: Room, queue: QueuedSkill[]) {
+async function executeTurn(io: Server, room: Room, queue: QueuedSkill[], opts: { raw?: boolean } = {}) {
   if (!room.state) return
   clearTimer(room)
 
   const teamId: TeamId = room.activeSlot === 'p1' ? 'player' : 'ai'
-  const finalQueue = room.activeSlot === 'p2' ? unflipQueue(queue) : queue
+  // Bot-generated queues (buildAIQueue) already target 'player'/'ai' directly — only a real
+  // p2 client's submission needs un-flipping back from its own mirrored perspective.
+  const finalQueue = (room.activeSlot === 'p2' && !opts.raw) ? unflipQueue(queue) : queue
 
   room.state = resolveSinglePlayerTurn(room.state, teamId, finalQueue)
   emit(io, room)
@@ -269,6 +302,27 @@ async function handleDisconnectForfeit(io: Server, room: Room, disconnectedSocke
   // room.state is always from p1's perspective; flip the phase to match who actually won.
   room.state = { ...room.state, phase: p1Disconnected ? 'defeat' : 'victory' }
   emit(io, room)
+}
+
+/** Matches a searching player against a bot opponent after the matchmaking timeout — the bot looks and acts like a real player. */
+function startBotMatch(io: Server, socketId: string) {
+  const user = socketToUser.get(socketId)
+  const socket = io.sockets.sockets.get(socketId)
+  if (!user || !socket || BOT_USERS.length === 0) return
+
+  const bot = BOT_USERS[Math.floor(Math.random() * BOT_USERS.length)]
+  const code = generateCode()
+  const room: Room = {
+    code,
+    p1: { socketId, userId: user.id, slot: 'p1', team: null },
+    p2: { socketId: `bot:${bot.id}`, userId: bot.id, slot: 'p2', team: pickRandomBotTeam() },
+    state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false, isLadder: true, botSlot: 'p2',
+  }
+  rooms.set(code, room)
+  socketToRoom.set(socketId, code)
+  void socket.join(code)
+  io.to(socketId).emit('match_found', { code, slot: 'p1', opponentUsername: bot.username })
+  console.log(`Ladder match ${code}: ${socketId} vs bot ${bot.username}`)
 }
 
 // ─── Server ───────────────────────────────────────────────────────────────────
@@ -645,6 +699,7 @@ io.on('connection', (socket: Socket) => {
     if (matchQueue.includes(socket.id)) return
     if (matchQueue.length > 0) {
       const oppId = matchQueue.shift()!
+      clearBotFallback(oppId)
       const opp   = io.sockets.sockets.get(oppId)
       if (!opp?.connected) { matchQueue.push(socket.id); socket.emit('searching'); return }
       const code = generateCode()
@@ -652,7 +707,7 @@ io.on('connection', (socket: Socket) => {
         code,
         p1: { socketId: oppId, userId: socketToUser.get(oppId)!.id, slot: 'p1', team: null },
         p2: { socketId: socket.id, userId: socketToUser.get(socket.id)!.id, slot: 'p2', team: null },
-        state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false, isLadder: true,
+        state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false, isLadder: true, botSlot: null,
       }
       rooms.set(code, room)
       socketToRoom.set(oppId,     code)
@@ -666,12 +721,22 @@ io.on('connection', (socket: Socket) => {
       matchQueue.push(socket.id)
       socket.emit('searching')
       console.log(`${socket.id} entered matchmaking queue (${matchQueue.length} waiting)`)
+      const delay = MATCHMAKING_BOT_FALLBACK_MIN_MS + Math.random() * MATCHMAKING_BOT_FALLBACK_JITTER_MS
+      const timer = setTimeout(() => {
+        botFallbackTimers.delete(socket.id)
+        const qi = matchQueue.indexOf(socket.id)
+        if (qi < 0) return // already matched with a real opponent or left the queue
+        matchQueue.splice(qi, 1)
+        startBotMatch(io, socket.id)
+      }, delay)
+      botFallbackTimers.set(socket.id, timer)
     }
   })
 
   socket.on('cancel_search', () => {
     const idx = matchQueue.indexOf(socket.id)
     if (idx >= 0) matchQueue.splice(idx, 1)
+    clearBotFallback(socket.id)
   })
 
   socket.on('create_room', () => {
@@ -679,7 +744,7 @@ io.on('connection', (socket: Socket) => {
     const room: Room = {
       code,
       p1: { socketId: socket.id, userId: socketToUser.get(socket.id)!.id, slot: 'p1', team: null },
-      p2: null, state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false, isLadder: false,
+      p2: null, state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false, isLadder: false, botSlot: null,
     }
     rooms.set(code, room)
     socketToRoom.set(socket.id, code)
@@ -750,6 +815,7 @@ io.on('connection', (socket: Socket) => {
     console.log(`[-] ${socket.id}`)
     const qi = matchQueue.indexOf(socket.id)
     if (qi >= 0) matchQueue.splice(qi, 1)
+    clearBotFallback(socket.id)
     socketToUser.delete(socket.id)
     const code = socketToRoom.get(socket.id)
     if (!code) return
@@ -764,6 +830,7 @@ io.on('connection', (socket: Socket) => {
 })
 
 await initializeDatabase()
+BOT_USERS = await ensureBotUsers(BOT_USERNAMES, dummyPasswordHash)
 const sessionCleanupTimer = setInterval(() => {
   void deleteExpiredSessions().catch(error => console.error('Session cleanup failed', error))
 }, 24 * 60 * 60 * 1000)
