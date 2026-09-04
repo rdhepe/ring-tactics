@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, memo } from 'react'
 import { usePvpStore } from '../../store/pvpStore'
 import { useAuthStore } from '../../store/authStore'
 import { useMissionStore } from '../../store/missionStore'
+import { useRankStore } from '../../store/rankStore'
 import { CharacterRow } from './CharacterRow'
 import type { IncomingQueued } from './CharacterRow'
 import { EnergyBar } from './EnergyBar'
@@ -50,7 +51,7 @@ const TurnTimer = memo(function TurnTimer({ initialTime }: { initialTime: number
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function PvpBattleArena({ onReset }: { onReset: () => void }) {
+export function PvpBattleArena({ onReset, isLadder = false }: { onReset: () => void; isLadder?: boolean }) {
   // Granular selectors — each only re-renders this component when its own slice changes
   const serverState       = usePvpStore(s => s.battleState)
   const myTurn            = usePvpStore(s => s.myTurn)
@@ -61,6 +62,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
   const switchMode        = usePvpStore(s => s.switchMode)
   const myUsername        = useAuthStore().username
   const recordMissionMatch = useMissionStore(s => s.recordMatch)
+  const addMatch           = useRankStore(s => s.addMatch)
 
   const [localQueue,   setLocalQueue]   = useState<QueuedSkill[]>([])
   const [selectedChar, setSelectedChar] = useState(0)
@@ -68,6 +70,7 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
   const [pendingAlloc, setPendingAlloc] = useState<{ charIdx: number; skillId: string; targetTeam: 'player'|'ai'; targetIdx: number } | null>(null)
   const [summary, setSummary]           = useState<{ turn: number; playerLines: string[]; aiLines: string[]; phase: 'player'|'ai' } | null>(null)
   const [logOpen, setLogOpen]           = useState(false)
+  const [reward, setReward]             = useState<{ xp: number; coins: number } | null>(null)
   const lastTurnRef = useRef(0)
   const missionRecordedRef = useRef(false)
 
@@ -85,7 +88,12 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
       serverState.player.characters.map(character => character.character.id),
       serverState.ai.characters.map(character => character.character.id),
     )
+    // Only ladder matches count toward rank/XP and earn coins
+    if (isLadder) setReward(addMatch(result, serverState.turn, survivingAllies))
   }, [serverState?.phase])
+
+  // Reset award state when a new match starts
+  useEffect(() => { missionRecordedRef.current = false; setReward(null) }, [])
 
   useEffect(() => {
     if (!serverState) return
@@ -261,6 +269,11 @@ export function PvpBattleArena({ onReset }: { onReset: () => void }) {
                           color: state.phase === 'victory' ? '#ffd166' : '#f45e3f' }}>
                 {state.phase === 'victory' ? '🏆 YOU WIN' : '💀 YOU LOSE'}
               </p>
+              {reward && (
+                <p style={{ fontFamily: 'monospace', fontSize: 10, color: '#ffd166' }}>
+                  +{reward.xp} XP{reward.coins > 0 ? ` · +${reward.coins} 🪙` : ''}
+                </p>
+              )}
               <button onClick={onReset}
                       style={{ padding: '6px 20px', background: '#1d2235', color: '#c8cfe8',
                                border: '1px solid #2e3755', fontFamily: 'monospace', fontSize: 9, cursor: 'pointer' }}>

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBattleStore } from '../../store/battleStore'
-import { useRankStore } from '../../store/rankStore'
 import { API, useAuthStore } from '../../store/authStore'
 import { useMissionStore } from '../../store/missionStore'
 import { CharacterRow } from './CharacterRow'
@@ -18,10 +17,9 @@ const TURN_SECS = 60
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
-function BattleHeader({ state, username, isOver, isAITurn, timeLeft, xpGained, onReadyClick, onReset }: {
+function BattleHeader({ state, username, isOver, isAITurn, timeLeft, onReadyClick, onReset }: {
   state: BattleState; isOver: boolean; isAITurn: boolean; timeLeft: number
   username: string | null
-  xpGained: number | null
   onReadyClick: () => void; onReset: () => void
 }) {
   const isVictory   = state.phase === 'victory'
@@ -42,10 +40,6 @@ function BattleHeader({ state, username, isOver, isAITurn, timeLeft, xpGained, o
       <div className="flex flex-col items-center gap-1 flex-1 mx-4">
         {isOver ? (
           <div className="flex flex-col items-center gap-1">
-            {xpGained !== null && (
-              <p style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 9,
-                          color: '#ffd166' }}>+{xpGained} XP</p>
-            )}
             <button onClick={onReset}
                     className="px-6 py-2 font-bold uppercase tracking-widest transition-all"
                     style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 8,
@@ -265,14 +259,12 @@ export function BattleArena() {
   const { battleState: state, selectedCharIdx, pendingSkill,
     selectChar, setPendingSkill, queueSkill, dequeueSkill, switchMode, endTurn, reset,
   } = useBattleStore()
-  const { addMatch } = useRankStore()
   const username = useAuthStore(state => state.username)
   const recordMissionMatch = useMissionStore(state => state.recordMatch)
 
   const [pendingAlloc, setPendingAlloc]   = useState<{ charIdx: number; skillId: string; targetTeam: 'player'|'ai'; targetIdx: number } | null>(null)
   const [timeLeft,     setTimeLeft]       = useState(TURN_SECS)
   const [summary, setSummary] = useState<{ turn: number; playerLines: string[]; aiLines: string[]; phase: 'player' | 'ai' } | null>(null)
-  const [xpGained, setXpGained] = useState<number | null>(null)
   const [logOpen, setLogOpen] = useState(false)
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastTurnRef = useRef(0)
@@ -288,7 +280,7 @@ export function BattleArena() {
     xpAwardedRef.current = true
     const result = state.phase === 'victory' ? 'win' : 'loss'
     const survivingAllies = state.player.characters.filter(c => !c.isDead).length
-    const gained = addMatch(result, state.turn, survivingAllies)
+    // AI matches don't count toward rank/XP — only ladder matches do
     if (username) void fetch(`${API}/stats/match`, {
       method: 'POST',
       credentials: 'include',
@@ -305,11 +297,10 @@ export function BattleArena() {
       state.player.characters.map(character => character.character.id),
       state.ai.characters.map(character => character.character.id),
     )
-    setXpGained(gained)
   }, [state?.phase])
 
   // Reset award flag when a new battle starts
-  useEffect(() => { xpAwardedRef.current = false; setXpGained(null) }, [])
+  useEffect(() => { xpAwardedRef.current = false }, [])
 
   // Show turn summary after resolution completes
   useEffect(() => {
@@ -479,7 +470,7 @@ export function BattleArena() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)', background: '#090b16', overflow: 'hidden' }}>
       <BattleHeader
         state={state} username={username} isOver={isOver} isAITurn={isAITurn} timeLeft={timeLeft}
-        xpGained={xpGained}
+
         onReadyClick={handleReady}
         onReset={reset}
       />

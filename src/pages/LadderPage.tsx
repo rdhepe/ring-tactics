@@ -90,7 +90,7 @@ export function LadderPage() {
     return <ErrorScreen message={errorMsg ?? 'Connection failed.'} onReset={handleReset} />
 
   if (pvpPhase === 'battle' || pvpPhase === 'game_over')
-    return battleState ? <PvpBattleArena onReset={handleReset} /> : null
+    return battleState ? <PvpBattleArena onReset={handleReset} isLadder /> : null
 
   if (pvpPhase === 'team_select') {
     if (teamSubmitted) {

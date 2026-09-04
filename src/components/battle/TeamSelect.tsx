@@ -22,6 +22,7 @@ export function TeamSelect({ onStart, onBack }: TeamSelectProps) {
 
   return (
     <div className="arena-page min-h-screen bg-px-base text-px-text flex flex-col">
+      <div className="sticky top-0 z-30">
       <div className="arena-page-header" style={{ background: '#141726', borderBottom: '4px solid #c42b2b' }}>
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-end justify-between gap-4 flex-wrap">
           <div>
@@ -72,6 +73,7 @@ export function TeamSelect({ onStart, onBack }: TeamSelectProps) {
           </div>
         </div>
       )}
+      </div>
 
       <div className="flex-1 max-w-6xl mx-auto w-full px-4 py-6 flex flex-col lg:flex-row gap-5">
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 content-start">

@@ -39,6 +39,9 @@ export function calcXp(result: 'win' | 'loss', turns: number, survivingAllies: n
   return xp
 }
 
+/** Coins awarded for winning a ladder match. */
+export const COINS_PER_LADDER_WIN = 50
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export interface MatchRecord {
@@ -49,35 +52,46 @@ export interface MatchRecord {
 }
 
 interface RankStore {
-  xp:      number
-  wins:    number
-  losses:  number
-  history: MatchRecord[]
-  addMatch: (result: 'win' | 'loss', turns: number, survivingAllies: number) => number
-  reset:    () => void
+  xp:       number
+  coins:    number
+  diamonds: number
+  wins:     number
+  losses:   number
+  history:  MatchRecord[]
+  /** Only ladder matches should call this — it grants XP/rank progress and, on a win, coins. */
+  addMatch: (result: 'win' | 'loss', turns: number, survivingAllies: number) => { xp: number; coins: number }
+  /** Placeholder for real-money diamond purchases — payment integration TBD. */
+  buyDiamonds: (amount: number) => void
+  reset:       () => void
 }
 
 export const useRankStore = create<RankStore>()(
   persist(
     (set) => ({
-      xp:      0,
-      wins:    0,
-      losses:  0,
-      history: [],
+      xp:       0,
+      coins:    0,
+      diamonds: 0,
+      wins:     0,
+      losses:   0,
+      history:  [],
 
       addMatch: (result, turns, survivingAllies) => {
         const gained = calcXp(result, turns, survivingAllies)
+        const coinsGained = result === 'win' ? COINS_PER_LADDER_WIN : 0
         set(s => ({
           xp:      s.xp + gained,
+          coins:   s.coins + coinsGained,
           wins:    result === 'win' ? s.wins + 1 : s.wins,
           losses:  result === 'loss' ? s.losses + 1 : s.losses,
           history: [{ result, xpGained: gained, turns, timestamp: Date.now() },
                     ...s.history].slice(0, 30),
         }))
-        return gained
+        return { xp: gained, coins: coinsGained }
       },
 
-      reset: () => set({ xp: 0, wins: 0, losses: 0, history: [] }),
+      buyDiamonds: (amount) => set(s => ({ diamonds: s.diamonds + amount })),
+
+      reset: () => set({ xp: 0, coins: 0, diamonds: 0, wins: 0, losses: 0, history: [] }),
     }),
     { name: 'slam-arena-rank' }
   )

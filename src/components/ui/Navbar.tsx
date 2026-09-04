@@ -1,8 +1,10 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { useRankStore } from '../../store/rankStore'
 
 export function Navbar() {
   const { username, isLoggedIn, logout } = useAuthStore()
+  const { coins, diamonds } = useRankStore()
   const navigate = useNavigate()
 
   const navLinks = [
@@ -37,6 +39,15 @@ export function Navbar() {
         <div className="ml-auto flex items-center gap-3">
           {isLoggedIn ? (
             <>
+              <span title="Coins" style={{ fontFamily: 'monospace', fontSize: 10, color: '#ffd166',
+                             background: '#ffd16622', border: '1px solid #ffd16644', padding: '3px 10px' }}>
+                🪙 {coins}
+              </span>
+              <span title="Diamonds — purchasable with real money (coming soon)"
+                    style={{ fontFamily: 'monospace', fontSize: 10, color: '#6be8ff',
+                             background: '#6be8ff22', border: '1px solid #6be8ff44', padding: '3px 10px' }}>
+                💎 {diamonds}
+              </span>
               <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#38d9a9',
                              background: '#38d9a922', border: '1px solid #38d9a944', padding: '3px 10px' }}>
                 {username}
