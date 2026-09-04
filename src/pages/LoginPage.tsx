@@ -11,10 +11,12 @@ export function LoginPage() {
 
   const [mode, setMode]         = useState<Mode>('login')
   const [username, setUsername] = useState('')
+  const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [confirm,  setConfirm]  = useState('')
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(false)
+  const [registered, setRegistered] = useState(false)
 
   const returnTo = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/battle'
 
@@ -28,11 +30,14 @@ export function LoginPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify(mode === 'register'
+          ? { username: username.trim(), password, email: email.trim() }
+          : { username: username.trim(), password }),
       })
-      const data = await res.json() as { username?: string; email?: string | null; error?: string }
+      const data = await res.json() as { username?: string; email?: string | null; emailVerified?: boolean; error?: string }
       if (!res.ok) { setError(data.error ?? 'Something went wrong.'); return }
-      login(data.username!, data.email ?? null)
+      login(data.username!, data.email ?? null, data.emailVerified ?? false)
+      if (mode === 'register') { setRegistered(true); return }
       navigate(returnTo, { replace: true })
     } catch {
       setError('Cannot reach server. Make sure it is running.')
@@ -64,6 +69,21 @@ export function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="arena-panel arena-panel-yellow" style={{ width: 380, background: '#141726', border: '2px solid #2e3755',
                       boxShadow: '0 8px 40px rgba(0,0,0,.8)' }}>
+          {registered ? (
+            <div className="flex flex-col items-center gap-4 p-6 text-center">
+              <p style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 10, color: '#38d9a9' }}>✓ ACCOUNT CREATED</p>
+              <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#c8cfe8' }}>
+                We sent a verification link to <span style={{ color: '#ffd166' }}>{email}</span>. Check your inbox to verify your email.
+              </p>
+              <button className="arena-action" onClick={() => navigate(returnTo, { replace: true })}
+                      style={{ padding: '10px 24px', background: '#c42b2b', color: '#fff',
+                               fontFamily: "'Press Start 2P', monospace", fontSize: 8,
+                               boxShadow: '3px 3px 0 #7a1a0a', border: 'none', cursor: 'pointer' }}>
+                ▶ CONTINUE
+              </button>
+            </div>
+          ) : (
+          <>
           {/* Tab switcher */}
           <div className="flex" style={{ borderBottom: '2px solid #2e3755' }}>
             {(['login', 'register'] as Mode[]).map(m => (
@@ -89,6 +109,16 @@ export function LoginPage() {
                      placeholder="YourName" maxLength={20} required
                      style={inputStyle(false)} />
             </div>
+
+            {mode === 'register' && (
+              <div>
+                <label style={{ fontFamily: 'monospace', fontSize: 10, color: '#4a5578',
+                                display: 'block', marginBottom: 6 }}>EMAIL</label>
+                <input value={email} onChange={e => setEmail(e.target.value)}
+                       type="email" placeholder="you@example.com" maxLength={254} required
+                       style={inputStyle(false)} />
+              </div>
+            )}
 
             <div>
               <label style={{ fontFamily: 'monospace', fontSize: 10, color: '#4a5578',
@@ -116,7 +146,7 @@ export function LoginPage() {
 
             {mode === 'register' && (
               <p style={{ fontFamily: 'monospace', fontSize: 9, color: '#4a5578', margin: 0 }}>
-                Use at least 12 characters. Your account is stored securely.
+                Use at least 12 characters. We'll send a verification link to your email.
               </p>
             )}
 
@@ -134,6 +164,8 @@ export function LoginPage() {
               {loading ? 'Please wait...' : mode === 'login' ? '▶ LOGIN' : '▶ CREATE ACCOUNT'}
             </button>
           </form>
+          </>
+          )}
         </div>
       </div>
     </div>

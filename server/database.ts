@@ -36,9 +36,21 @@ export async function initializeDatabase() {
       username_normalized VARCHAR(20) NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       email VARCHAR(254),
+      email_verified BOOLEAN NOT NULL DEFAULT false,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (LOWER(email)) WHERE email IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+      token_hash CHAR(64) PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS email_verification_tokens_user_id_idx ON email_verification_tokens(user_id);
 
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash CHAR(64) PRIMARY KEY,
@@ -92,8 +104,10 @@ export async function initializeDatabase() {
   // Migration safety net: add columns for DBs created before they existed.
   await pool.query('ALTER TABLE wallets ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 0')
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(254)')
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false')
 
   await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()')
+  await pool.query('DELETE FROM email_verification_tokens WHERE expires_at <= NOW()')
 }
 
 export function normalizeUsername(username: string) {
@@ -108,16 +122,16 @@ export async function findUserByUsername(username: string) {
   return result.rows[0] ?? null
 }
 
-export async function createUser(username: string, passwordHash: string): Promise<AuthenticatedUser> {
+export async function createUser(username: string, passwordHash: string, email: string): Promise<AuthenticatedUser> {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     const id = randomUUID()
     const result = await client.query<AuthenticatedUser>(
-      `INSERT INTO users (id, username, username_normalized, password_hash)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO users (id, username, username_normalized, password_hash, email)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id, username`,
-      [id, username.trim(), normalizeUsername(username), passwordHash],
+      [id, username.trim(), normalizeUsername(username), passwordHash, email.trim().toLowerCase()],
     )
     await client.query('INSERT INTO player_stats (user_id) VALUES ($1)', [id])
     await client.query('INSERT INTO wallets (user_id) VALUES ($1)', [id])
@@ -383,16 +397,17 @@ export async function markDiamondOrderPaidAndCredit(orderId: string, userId: str
 export interface UserProfile {
   username: string
   email: string | null
+  emailVerified: boolean
   createdAt: string
 }
 
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
-  const result = await pool.query<{ username: string; email: string | null; created_at: string }>(
-    'SELECT username, email, created_at FROM users WHERE id = $1',
+  const result = await pool.query<{ username: string; email: string | null; email_verified: boolean; created_at: string }>(
+    'SELECT username, email, email_verified, created_at FROM users WHERE id = $1',
     [userId],
   )
   const row = result.rows[0]
-  return row ? { username: row.username, email: row.email, createdAt: row.created_at } : null
+  return row ? { username: row.username, email: row.email, emailVerified: row.email_verified, createdAt: row.created_at } : null
 }
 
 export async function getUserPasswordHash(userId: string): Promise<string | null> {
@@ -405,7 +420,43 @@ export async function updateUserPassword(userId: string, passwordHash: string) {
 }
 
 export async function updateUserEmail(userId: string, email: string | null) {
-  await pool.query('UPDATE users SET email = $2, updated_at = NOW() WHERE id = $1', [userId, email])
+  // Changing the email invalidates prior verification — the new address must be re-verified.
+  await pool.query('UPDATE users SET email = $2, email_verified = false, updated_at = NOW() WHERE id = $1', [userId, email])
+}
+
+// ─── Email verification ───────────────────────────────────────────────────────
+
+export async function createEmailVerificationToken(userId: string, tokenHash: string, expiresAt: Date) {
+  await pool.query('DELETE FROM email_verification_tokens WHERE user_id = $1', [userId])
+  await pool.query(
+    'INSERT INTO email_verification_tokens (token_hash, user_id, expires_at) VALUES ($1, $2, $3)',
+    [tokenHash, userId, expiresAt],
+  )
+}
+
+/** Consumes a verification token exactly once and marks the owning user's email verified. */
+export async function verifyEmailToken(tokenHash: string): Promise<{ userId: string; username: string } | null> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const deleted = await client.query<{ user_id: string }>(
+      `DELETE FROM email_verification_tokens WHERE token_hash = $1 AND expires_at > NOW() RETURNING user_id`,
+      [tokenHash],
+    )
+    const userId = deleted.rows[0]?.user_id
+    if (!userId) { await client.query('ROLLBACK'); return null }
+    const updated = await client.query<{ username: string }>(
+      'UPDATE users SET email_verified = true, updated_at = NOW() WHERE id = $1 RETURNING username',
+      [userId],
+    )
+    await client.query('COMMIT')
+    return updated.rows[0] ? { userId, username: updated.rows[0].username } : null
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 export interface DiamondOrderHistoryEntry {

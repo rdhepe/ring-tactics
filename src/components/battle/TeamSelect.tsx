@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ALL_CHARACTERS } from '../../data/characters'
 import { CharacterCard } from '../characters/CharacterCard'
 import { CharacterDetail } from '../characters/CharacterDetail'
@@ -8,12 +8,60 @@ import type { Character } from '../../types'
 
 const MAX_TEAM = 3
 
-interface TeamSelectProps { onStart: (team: Character[]) => void; onBack?: () => void }
+interface TeamSelectProps {
+  onStart: (team: Character[]) => void
+  onBack?: () => void
+  /** If set, shows a countdown and auto-fills/submits a team of unlocked wrestlers when time runs out (e.g. ranked ladder matches). */
+  autoSubmitSecs?: number
+  /** Overrides the small header line above "Pick Your Stable" (defaults to "Match Setup · VS AI"). */
+  subtitle?: string
+}
 
-export function TeamSelect({ onStart, onBack }: TeamSelectProps) {
+export function TeamSelect({ onStart, onBack, autoSubmitSecs, subtitle = 'Match Setup · VS AI' }: TeamSelectProps) {
   const [team,    setTeam]    = useState<Character[]>([])
   const [preview, setPreview] = useState<Character | null>(ALL_CHARACTERS[0])
   const unlockedCharacters = useRankStore(s => s.unlockedCharacters)
+
+  const teamRef = useRef(team)
+  useEffect(() => { teamRef.current = team }, [team])
+  const unlockedRef = useRef(unlockedCharacters)
+  useEffect(() => { unlockedRef.current = unlockedCharacters }, [unlockedCharacters])
+  const onStartRef = useRef(onStart)
+  useEffect(() => { onStartRef.current = onStart }, [onStart])
+
+  const [timeLeft, setTimeLeft] = useState(autoSubmitSecs ?? 0)
+
+  useEffect(() => {
+    if (!autoSubmitSecs) return
+    setTimeLeft(autoSubmitSecs)
+    let autoSubmitted = false
+
+    function autoPickAndSubmit() {
+      if (autoSubmitted) return
+      autoSubmitted = true
+      const isAvailable = (c: Character) => FREE_RARITIES.includes(c.rarity) || unlockedRef.current.includes(c.id)
+      const filled = [...teamRef.current]
+      for (const c of ALL_CHARACTERS) {
+        if (filled.length >= MAX_TEAM) break
+        if (filled.some(x => x.id === c.id)) continue
+        if (!isAvailable(c)) continue
+        filled.push(c)
+      }
+      onStartRef.current(filled.slice(0, MAX_TEAM))
+    }
+
+    const id = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 1) {
+          clearInterval(id)
+          autoPickAndSubmit()
+          return 0
+        }
+        return t - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [autoSubmitSecs])
 
   function toggleChar(c: Character) {
     const isLocked = !FREE_RARITIES.includes(c.rarity) && !unlockedCharacters.includes(c.id)
@@ -31,10 +79,19 @@ export function TeamSelect({ onStart, onBack }: TeamSelectProps) {
       <div className="arena-page-header" style={{ background: '#141726', borderBottom: '4px solid #c42b2b' }}>
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-px-dim text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ fontFamily: 'monospace' }}>Match Setup · VS AI</p>
+            <p className="text-px-dim text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ fontFamily: 'monospace' }}>{subtitle}</p>
             <h1 className="text-2xl font-bold uppercase tracking-widest leading-none">Pick Your Stable</h1>
           </div>
           <div className="flex items-center gap-3">
+            {autoSubmitSecs != null && (
+              <span className="font-bold text-sm px-3 py-1.5"
+                    style={{ fontFamily: 'monospace', color: timeLeft <= 10 ? '#f45e3f' : '#ffd166',
+                             background: timeLeft <= 10 ? '#f45e3f11' : '#ffd16611',
+                             border: `1px solid ${timeLeft <= 10 ? '#f45e3f44' : '#ffd16644'}` }}
+                    title="Auto-picks your team if time runs out">
+                ⏱ 0:{String(timeLeft).padStart(2, '0')}
+              </span>
+            )}
             {onBack && (
               <button onClick={onBack}
                       className="px-4 py-2 text-xs font-bold uppercase tracking-widest hover:brightness-110 transition-all"

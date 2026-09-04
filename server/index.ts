@@ -4,7 +4,7 @@ import { createServer } from 'http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Server, type Socket } from 'socket.io'
-import { randomBytes, createHmac, timingSafeEqual } from 'crypto'
+import { randomBytes, createHash, createHmac, timingSafeEqual } from 'crypto'
 import argon2 from 'argon2'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
@@ -20,6 +20,7 @@ import { CHARACTER_RARITY } from '../src/data/characterRarities.js'
 import {
   createSession,
   createDiamondOrder,
+  createEmailVerificationToken,
   createUser,
   creditCoins,
   deleteExpiredSessions,
@@ -39,6 +40,7 @@ import {
   unlockCharacterAtomic,
   updateUserEmail,
   updateUserPassword,
+  verifyEmailToken,
   type AuthenticatedUser,
   type PlayerStats,
   pool,
@@ -54,13 +56,52 @@ const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
 const razorpay = razorpayKeyId && razorpayKeySecret
   ? new Razorpay({ key_id: razorpayKeyId, key_secret: razorpayKeySecret })
   : null
+const brevoApiKey = process.env.BREVO_API_KEY
+const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL
+const brevoSenderName = process.env.BREVO_SENDER_NAME ?? 'Ring Tactics'
 const railwayOrigin = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : ''
 const allowedOrigins = (process.env.APP_ORIGIN ?? `http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5174,${railwayOrigin}`)
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean)
+// The origin used to build links inside emails (verification, etc.) — the first configured app origin.
+const primaryAppOrigin = allowedOrigins[0] ?? 'http://localhost:5173'
 
-const credentialsSchema = z.object({
+async function sendVerificationEmail(toEmail: string, toName: string, verifyUrl: string) {
+  if (!brevoApiKey || !brevoSenderEmail) {
+    console.warn('BREVO_API_KEY/BREVO_SENDER_EMAIL not set — skipping verification email send.')
+    return
+  }
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': brevoApiKey, 'Content-Type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({
+      sender: { name: brevoSenderName, email: brevoSenderEmail },
+      to: [{ email: toEmail, name: toName }],
+      subject: 'Verify your Ring Tactics email',
+      htmlContent: `<p>Hi ${toName},</p>
+        <p>Confirm your email address to finish setting up your Ring Tactics account:</p>
+        <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+        <p>This link expires in 24 hours. If you didn't create this account, you can ignore this email.</p>`,
+    }),
+  })
+  if (!res.ok) console.error('Brevo send failed', res.status, await res.text().catch(() => ''))
+}
+
+async function issueEmailVerification(userId: string, email: string, username: string) {
+  const rawToken = randomBytes(32).toString('base64url')
+  const tokenHash = createHash('sha256').update(rawToken).digest('hex')
+  await createEmailVerificationToken(userId, tokenHash, new Date(Date.now() + 24 * 60 * 60 * 1000))
+  const verifyUrl = `${primaryAppOrigin}/verify-email?token=${rawToken}`
+  await sendVerificationEmail(email, username, verifyUrl).catch(error => console.error('Failed to send verification email', error))
+}
+
+const registerSchema = z.object({
+  username: z.string().trim().regex(/^[a-zA-Z0-9_-]{3,20}$/),
+  password: z.string().min(12).max(128),
+  email: z.email().max(254),
+})
+const loginCredentialsSchema = z.object({
   username: z.string().trim().regex(/^[a-zA-Z0-9_-]{3,20}$/),
   password: z.string().min(12).max(128),
 })
@@ -246,21 +287,25 @@ app.use((req, res, next) => {
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false })
 
 app.post('/auth/register', authLimiter, async (req, res) => {
-  const parsed = credentialsSchema.safeParse(req.body)
-  if (!parsed.success) { res.status(400).json({ error: 'Username must be 3-20 characters; password must be 12-128 characters.' }); return }
+  const parsed = registerSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Username must be 3-20 characters, password must be 12-128 characters, and a valid email is required.' }); return }
   try {
     const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 3, parallelism: 1 })
-    const user = await createUser(parsed.data.username, passwordHash)
+    const user = await createUser(parsed.data.username, passwordHash, parsed.data.email)
     await issueSession(res, user)
-    res.status(201).json({ username: user.username, email: null })
+    await issueEmailVerification(user.id, parsed.data.email, user.username)
+    res.status(201).json({ username: user.username, email: parsed.data.email, emailVerified: false })
   } catch (error) {
-    if ((error as { code?: string }).code === '23505') { res.status(409).json({ error: 'Username already taken.' }); return }
+    const code = (error as { code?: string; constraint?: string }).code
+    const constraint = (error as { constraint?: string }).constraint
+    if (code === '23505' && constraint === 'users_email_unique_idx') { res.status(409).json({ error: 'Email already registered.' }); return }
+    if (code === '23505') { res.status(409).json({ error: 'Username already taken.' }); return }
     throw error
   }
 })
 
 app.post('/auth/login', authLimiter, async (req, res) => {
-  const parsed = credentialsSchema.safeParse(req.body)
+  const parsed = loginCredentialsSchema.safeParse(req.body)
   if (!parsed.success) { res.status(401).json({ error: 'Invalid username or password.' }); return }
   const user = await findUserByUsername(parsed.data.username)
   const passwordMatches = await argon2.verify(user?.password_hash ?? dummyPasswordHash, parsed.data.password)
@@ -269,14 +314,14 @@ app.post('/auth/login', authLimiter, async (req, res) => {
   }
   await issueSession(res, user)
   const profile = await getUserProfile(user.id)
-  res.json({ username: user.username, email: profile?.email ?? null })
+  res.json({ username: user.username, email: profile?.email ?? null, emailVerified: profile?.emailVerified ?? false })
 })
 
 app.get('/auth/me', async (req, res) => {
   const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
   if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
   const profile = await getUserProfile(user.id)
-  res.json({ username: user.username, email: profile?.email ?? null })
+  res.json({ username: user.username, email: profile?.email ?? null, emailVerified: profile?.emailVerified ?? false })
 })
 
 app.post('/auth/logout', async (req, res) => {
@@ -308,7 +353,35 @@ app.patch('/profile', authLimiter, async (req, res) => {
   if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
   const parsed = emailSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Enter a valid email address.' }); return }
-  await updateUserEmail(user.id, parsed.data.email)
+  try {
+    await updateUserEmail(user.id, parsed.data.email)
+    if (parsed.data.email) await issueEmailVerification(user.id, parsed.data.email, user.username)
+    res.json({ ok: true })
+  } catch (error) {
+    if ((error as { code?: string }).code === '23505') { res.status(409).json({ error: 'That email is already in use.' }); return }
+    throw error
+  }
+})
+
+const verifyEmailSchema = z.object({ token: z.string().min(1) })
+const verifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false })
+
+app.post('/auth/verify-email', verifyLimiter, async (req, res) => {
+  const parsed = verifyEmailSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid verification link.' }); return }
+  const tokenHash = createHash('sha256').update(parsed.data.token).digest('hex')
+  const result = await verifyEmailToken(tokenHash)
+  if (!result) { res.status(400).json({ error: 'This verification link is invalid or has expired.' }); return }
+  res.json({ ok: true, username: result.username })
+})
+
+app.post('/auth/resend-verification', authLimiter, async (req, res) => {
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+  const profile = await getUserProfile(user.id)
+  if (!profile?.email) { res.status(400).json({ error: 'Add an email address to your profile first.' }); return }
+  if (profile.emailVerified) { res.json({ ok: true, alreadyVerified: true }); return }
+  await issueEmailVerification(user.id, profile.email, user.username)
   res.json({ ok: true })
 })
 

@@ -159,7 +159,7 @@ function ErrorScreen({ message, onReset }: { message: string; onReset: () => voi
 
 export function PvpLobbyPage() {
   const navigate = useNavigate()
-  const { pvpPhase, roomCode, errorMsg, opponentReady, battleState,
+  const { pvpPhase, roomCode, errorMsg, opponentReady, opponentUsername, battleState,
     connect, createRoom, joinRoom, submitTeam, reset } = usePvpStore()
   const [teamSubmitted, setTeamSubmitted] = useState(false)
 
@@ -212,7 +212,7 @@ export function PvpLobbyPage() {
             ⚔ PvP · ROOM {roomCode} · SELECT YOUR TEAM
           </p>
         </div>
-        <TeamSelect onStart={handleTeamReady} />
+        <TeamSelect subtitle={`PvP Room ${roomCode} · VS ${opponentUsername ?? 'Opponent'}`} onStart={handleTeamReady} />
       </div>
     )
   }

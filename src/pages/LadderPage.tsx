@@ -68,6 +68,7 @@ export function LadderPage() {
   const pvpPhase       = usePvpStore(s => s.pvpPhase)
   const errorMsg       = usePvpStore(s => s.errorMsg)
   const opponentReady  = usePvpStore(s => s.opponentReady)
+  const opponentUsername = usePvpStore(s => s.opponentUsername)
   const battleState    = usePvpStore(s => s.battleState)
   const { cancelSearch, submitTeam, reset } = usePvpStore()
 
@@ -114,7 +115,8 @@ export function LadderPage() {
             ⚔ LADDER MATCH — SELECT YOUR TEAM
           </p>
         </div>
-        <TeamSelect onStart={(team: Character[]) => { submitTeam(team); setTeamSubmitted(true) }} />
+        <TeamSelect autoSubmitSecs={45} subtitle={`Ladder Match · VS ${opponentUsername ?? 'Opponent'}`}
+                    onStart={(team: Character[]) => { submitTeam(team); setTeamSubmitted(true) }} />
       </div>
     )
   }

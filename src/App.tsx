@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import { Navbar } from './components/ui/Navbar'
 import { Footer } from './components/ui/Footer'
 import { RequireAuth } from './components/ui/RequireAuth'
@@ -16,6 +16,7 @@ import { LeaderboardsPage } from './pages/Leaderboards'
 import { LegalPage } from './pages/LegalPage'
 import { DiamondStorePage } from './pages/DiamondStore'
 import { ProfilePage } from './pages/ProfilePage'
+import { VerifyEmailPage } from './pages/VerifyEmailPage'
 import { useAuthStore } from './store/authStore'
 import { useRankStore } from './store/rankStore'
 import './pages/ArenaTheme.css'
@@ -23,6 +24,8 @@ import './pages/ArenaTheme.css'
 export default function App() {
   const initializeAuth = useAuthStore(state => state.initialize)
   const isLoggedIn = useAuthStore(state => state.isLoggedIn)
+  const email = useAuthStore(state => state.email)
+  const emailVerified = useAuthStore(state => state.emailVerified)
   const fetchEconomy = useRankStore(state => state.fetchEconomy)
 
   useEffect(() => { void initializeAuth() }, [initializeAuth])
@@ -32,6 +35,13 @@ export default function App() {
     <BrowserRouter>
       <div className="min-h-screen bg-px-base flex flex-col">
         <Navbar />
+        {isLoggedIn && email && !emailVerified && (
+          <div style={{ background: '#4a3a10', borderBottom: '1px solid #ffd16644', padding: '6px 16px', textAlign: 'center' }}>
+            <p style={{ fontFamily: 'monospace', fontSize: 11, color: '#ffd166' }}>
+              Please verify your email to secure your account. <Link to="/profile" style={{ textDecoration: 'underline' }}>Resend / manage in Profile</Link>
+            </p>
+          </div>
+        )}
         <div className="flex-1">
           <Routes>
             <Route path="/" element={<HomePage />} />
@@ -41,6 +51,7 @@ export default function App() {
             <Route path="/leaderboards" element={<LeaderboardsPage />} />
             <Route path="/ranking" element={<RequireAuth><RankingPage /></RequireAuth>} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/battle" element={<RequireAuth><BattlePage /></RequireAuth>} />
             <Route path="/pvp"    element={<RequireAuth><PvpLobbyPage /></RequireAuth>} />
             <Route path="/ladder" element={<RequireAuth><LadderPage /></RequireAuth>} />

@@ -4,6 +4,7 @@ import { API, useAuthStore } from '../store/authStore'
 interface ProfileData {
   username: string
   email: string | null
+  emailVerified: boolean
   createdAt: string
 }
 
@@ -20,12 +21,14 @@ interface HistoryEntry {
 export function ProfilePage() {
   const username = useAuthStore(s => s.username)
   const setEmail = useAuthStore(s => s.setEmail)
+  const setEmailVerified = useAuthStore(s => s.setEmailVerified)
 
   const [profile, setProfile]   = useState<ProfileData | null>(null)
   const [history, setHistory]   = useState<HistoryEntry[]>([])
   const [emailInput, setEmailInput] = useState('')
   const [emailSaving, setEmailSaving] = useState(false)
   const [emailMsg, setEmailMsg]       = useState<{ text: string; ok: boolean } | null>(null)
+  const [resending, setResending]     = useState(false)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword]         = useState('')
@@ -60,11 +63,28 @@ export function ProfilePage() {
       const data = await res.json() as { error?: string }
       if (!res.ok) { setEmailMsg({ text: data.error ?? 'Could not update email.', ok: false }); return }
       setEmail(emailInput.trim() || null)
-      setEmailMsg({ text: 'Email updated.', ok: true })
+      setEmailVerified(false)
+      setProfile(p => p ? { ...p, email: emailInput.trim() || null, emailVerified: false } : p)
+      setEmailMsg({ text: 'Email updated. Check your inbox for a new verification link.', ok: true })
     } catch {
       setEmailMsg({ text: 'Cannot reach server.', ok: false })
     } finally {
       setEmailSaving(false)
+    }
+  }
+
+  async function resendVerification() {
+    setResending(true)
+    setEmailMsg(null)
+    try {
+      const res = await fetch(`${API}/auth/resend-verification`, { method: 'POST', credentials: 'include' })
+      const data = await res.json() as { error?: string }
+      if (!res.ok) { setEmailMsg({ text: data.error ?? 'Could not resend verification email.', ok: false }); return }
+      setEmailMsg({ text: 'Verification email sent.', ok: true })
+    } catch {
+      setEmailMsg({ text: 'Cannot reach server.', ok: false })
+    } finally {
+      setResending(false)
     }
   }
 
@@ -131,14 +151,32 @@ export function ProfilePage() {
             <label style={labelStyle}>EMAIL</label>
             <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)}
                    placeholder="you@example.com" style={inputStyle} />
+            {profile?.email && (
+              <span className="self-start" style={{
+                fontFamily: 'monospace', fontSize: 10, padding: '2px 8px',
+                color: profile.emailVerified ? '#38d9a9' : '#ffd166',
+                background: profile.emailVerified ? '#38d9a922' : '#ffd16622',
+              }}>
+                {profile.emailVerified ? '✓ VERIFIED' : '⚠ NOT VERIFIED'}
+              </span>
+            )}
             {emailMsg && (
               <p style={{ fontFamily: 'monospace', fontSize: 10, color: emailMsg.ok ? '#38d9a9' : '#f45e3f' }}>{emailMsg.text}</p>
             )}
-            <button type="submit" disabled={emailSaving}
-                    className="self-start px-4 py-2 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
-                    style={{ background: '#1d2235', color: '#e2e8ff', border: '1px solid #445180' }}>
-              {emailSaving ? 'Saving…' : 'Save Email'}
-            </button>
+            <div className="flex gap-2">
+              <button type="submit" disabled={emailSaving}
+                      className="px-4 py-2 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+                      style={{ background: '#1d2235', color: '#e2e8ff', border: '1px solid #445180' }}>
+                {emailSaving ? 'Saving…' : 'Save Email'}
+              </button>
+              {profile?.email && !profile.emailVerified && (
+                <button type="button" onClick={resendVerification} disabled={resending}
+                        className="px-4 py-2 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+                        style={{ background: '#ffd16622', color: '#ffd166', border: '1px solid #ffd16666' }}>
+                  {resending ? 'Sending…' : 'Resend Verification'}
+                </button>
+              )}
+            </div>
           </form>
         </div>
 
