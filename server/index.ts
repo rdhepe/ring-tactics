@@ -21,6 +21,7 @@ import {
   createSession,
   createDiamondOrder,
   createEmailVerificationToken,
+  createPreRegistration,
   createUser,
   creditCoins,
   deleteExpiredSessions,
@@ -51,6 +52,12 @@ const TURN_SECS = 60
 const isProduction = process.env.NODE_ENV === 'production'
 const SESSION_COOKIE = isProduction ? '__Host-arena_session' : 'arena_session'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+// Single centralized launch flag: set LAUNCH_LIVE=true to go live. Defaults to pre-launch (safer default).
+const LAUNCH_LIVE = process.env.LAUNCH_LIVE === 'true'
+// API route prefixes that are gated while in pre-launch mode. Static asset/SPA serving is untouched
+// so the frontend can still load and show the Coming Soon / Pre-Register / Tutorial pages.
+const GATED_API_PREFIXES = ['/auth', '/profile', '/payments', '/economy', '/stats', '/leaderboards']
+const PRELAUNCH_ALLOWED_PATHS = ['/health', '/config', '/pre-register']
 const razorpayKeyId = process.env.RAZORPAY_KEY_ID
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
 const razorpay = razorpayKeyId && razorpayKeySecret
@@ -280,6 +287,32 @@ app.use((req, res, next) => {
   const origin = req.get('origin')
   if (origin && !allowedOrigins.includes(origin)) { res.status(403).json({ error: 'Origin not allowed.' }); return }
   next()
+})
+
+// Pre-launch gate: while LAUNCH_LIVE is false, block the game/account API but keep static
+// asset serving, /health, /config, and /pre-register working so the Coming Soon and
+// Pre-Register pages still function.
+app.use((req, res, next) => {
+  if (LAUNCH_LIVE) { next(); return }
+  if (PRELAUNCH_ALLOWED_PATHS.includes(req.path)) { next(); return }
+  if (GATED_API_PREFIXES.some(prefix => req.path.startsWith(prefix))) {
+    res.status(503).json({ error: 'Ring Tactics is not live yet. Check back soon!' }); return
+  }
+  next()
+})
+
+app.get('/config', (_req, res) => {
+  res.json({ live: LAUNCH_LIVE })
+})
+
+const preRegisterLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false })
+const preRegisterSchema = z.object({ email: z.email().max(254) })
+
+app.post('/pre-register', preRegisterLimiter, async (req, res) => {
+  const parsed = preRegisterSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Enter a valid email address.' }); return }
+  const inserted = await createPreRegistration(parsed.data.email)
+  res.json({ ok: true, alreadyRegistered: !inserted })
 })
 
 // ─── Auth endpoints ───────────────────────────────────────────────────────────
@@ -557,6 +590,7 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 // ─── Socket auth middleware ───────────────────────────────────────────────────
 
 io.use((socket, next) => {
+  if (!LAUNCH_LIVE) { next(new Error('coming_soon')); return }
   const token = parseCookie(socket.handshake.headers.cookie ?? '')[SESSION_COOKIE]
   void getUserBySession(token ?? '').then(async user => {
     if (!user) { next(new Error('not_authenticated')); return }

@@ -40,6 +40,7 @@ Set these environment variables in the hosting platform:
 - `DATABASE_POOL_SIZE`: pool limit suitable for the database plan
 - `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`: from the Razorpay dashboard. Use `rzp_test_...` keys until payments are verified end-to-end, then switch to live keys. `RAZORPAY_KEY_SECRET` is read only on the server and must never be exposed to the frontend.
 - `BREVO_API_KEY` / `BREVO_SENDER_EMAIL` / `BREVO_SENDER_NAME`: used to send account email-verification links via Brevo's transactional email API. `BREVO_SENDER_EMAIL` must be a sender address verified in your Brevo account (Senders & IP → Senders). If unset, registration still works but verification emails are skipped (logged as a warning) — fine for local dev, required in production.
+- `LAUNCH_LIVE`: single global launch flag. `false` or unset keeps the site in Pre-Launch mode — visitors only see the Coming Soon page, with `/pre-register` and `/tutorial` still reachable, and the account/gameplay API (`/auth`, `/profile`, `/payments`, `/economy`, `/stats`, `/leaderboards`, PvP sockets) rejects requests with `503`. Set to `true` to go fully live — this is the one setting to flip at launch.
 
 Deploy the frontend and API under the same site (for example `game.example.com` and `api.example.com`) so strict cookies work predictably. Enable managed database backups, point-in-time recovery, TLS, monitoring, and credential rotation. Run at least two API instances behind a load balancer only after moving live room coordination from process memory to a shared service such as Redis.
 

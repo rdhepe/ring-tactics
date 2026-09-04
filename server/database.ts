@@ -98,6 +98,11 @@ export async function initializeDatabase() {
       paid_at TIMESTAMPTZ
     );
 
+    CREATE TABLE IF NOT EXISTS pre_registrations (
+      email VARCHAR(254) PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS diamond_orders_user_id_idx ON diamond_orders(user_id);
   `)
 
@@ -488,4 +493,15 @@ export async function getDiamondOrderHistory(userId: string): Promise<DiamondOrd
     createdAt: row.created_at,
     paidAt: row.paid_at,
   }))
+}
+
+// ─── Pre-registration ──────────────────────────────────────────────────────────
+
+/** Returns false if the email was already pre-registered (never throws on duplicates). */
+export async function createPreRegistration(email: string): Promise<boolean> {
+  const result = await pool.query(
+    'INSERT INTO pre_registrations (email) VALUES ($1) ON CONFLICT (email) DO NOTHING RETURNING email',
+    [email.trim().toLowerCase()],
+  )
+  return result.rowCount === 1
 }

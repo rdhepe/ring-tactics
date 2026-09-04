@@ -17,8 +17,12 @@ import { LegalPage } from './pages/LegalPage'
 import { DiamondStorePage } from './pages/DiamondStore'
 import { ProfilePage } from './pages/ProfilePage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
+import { PreRegisterPage } from './pages/PreRegisterPage'
+import { TutorialPage } from './pages/TutorialPage'
+import { ComingSoonPage } from './pages/ComingSoonPage'
 import { useAuthStore } from './store/authStore'
 import { useRankStore } from './store/rankStore'
+import { useLaunchStore } from './store/launchStore'
 import './pages/ArenaTheme.css'
 
 export default function App() {
@@ -27,9 +31,28 @@ export default function App() {
   const email = useAuthStore(state => state.email)
   const emailVerified = useAuthStore(state => state.emailVerified)
   const fetchEconomy = useRankStore(state => state.fetchEconomy)
+  const live = useLaunchStore(state => state.live)
+  const fetchConfig = useLaunchStore(state => state.fetchConfig)
 
+  useEffect(() => { void fetchConfig() }, [fetchConfig])
   useEffect(() => { void initializeAuth() }, [initializeAuth])
   useEffect(() => { if (isLoggedIn) void fetchEconomy() }, [isLoggedIn, fetchEconomy])
+
+  // Still checking the launch flag — avoid flashing the wrong UI.
+  if (live === null) return <div className="min-h-screen bg-px-base" />
+
+  // Pre-launch mode: only Pre-Register and Tutorial are reachable; everything else shows Coming Soon.
+  if (!live) {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/pre-register" element={<PreRegisterPage />} />
+          <Route path="/tutorial" element={<TutorialPage />} />
+          <Route path="*" element={<ComingSoonPage />} />
+        </Routes>
+      </BrowserRouter>
+    )
+  }
 
   return (
     <BrowserRouter>
@@ -57,6 +80,8 @@ export default function App() {
             <Route path="/ladder" element={<RequireAuth requireVerified><LadderPage /></RequireAuth>} />
             <Route path="/store" element={<DiamondStorePage />} />
             <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
+            <Route path="/pre-register" element={<PreRegisterPage />} />
+            <Route path="/tutorial" element={<TutorialPage />} />
             <Route path="/legal/:slug" element={<LegalPage />} />
           </Routes>
         </div>
