@@ -33,6 +33,7 @@ import {
   getDiamondOrderHistory,
   getEconomyState,
   getLeaderboardStats,
+  getPvpMatchHistory,
   getUserBySession,
   getUserPasswordHash,
   getUserProfile,
@@ -268,7 +269,7 @@ async function executeTurn(io: Server, room: Room, queue: QueuedSkill[], opts: {
       const p1Won = room.state.phase === 'victory'
       const winnerId = p1Won ? room.p1.userId : room.p2.userId
       const loserId  = p1Won ? room.p2.userId : room.p1.userId
-      await recordPvpMatch(winnerId, loserId)
+      await recordPvpMatch(winnerId, loserId, { reason: 'completed', turns: room.state.turn })
       // Only ranked ladder matches award coins — never trust the client's own reward math.
       if (room.isLadder) await creditCoins(winnerId, COINS_PER_LADDER_WIN)
     }
@@ -286,17 +287,28 @@ async function executeTurn(io: Server, room: Room, queue: QueuedSkill[], opts: {
  * as a plain disconnect with no stats recorded.
  */
 async function handleDisconnectForfeit(io: Server, room: Room, disconnectedSocketId: string) {
-  if (!room.state || room.resultRecorded || !room.p1 || !room.p2) {
+  if (room.resultRecorded || !room.p1 || !room.p2) {
     io.to(room.code).emit('opponent_disconnected')
     return
   }
+
+  if (!room.state) {
+    room.resultRecorded = true
+    const p1Disconnected = room.p1.socketId === disconnectedSocketId
+    const winnerId = p1Disconnected ? room.p2.userId : room.p1.userId
+    const loserId  = p1Disconnected ? room.p1.userId : room.p2.userId
+    await recordPvpMatch(winnerId, loserId, { reason: 'abandoned', turns: 0 })
+    io.to(room.code).emit('opponent_disconnected')
+    return
+  }
+
   if (room.state.phase !== 'player_turn') return // match already concluded normally
 
   room.resultRecorded = true
   const p1Disconnected = room.p1.socketId === disconnectedSocketId
   const winnerId = p1Disconnected ? room.p2.userId : room.p1.userId
   const loserId  = p1Disconnected ? room.p1.userId : room.p2.userId
-  await recordPvpMatch(winnerId, loserId)
+  await recordPvpMatch(winnerId, loserId, { reason: 'forfeit', turns: room.state.turn })
   if (room.isLadder) await creditCoins(winnerId, COINS_PER_LADDER_WIN)
 
   // room.state is always from p1's perspective; flip the phase to match who actually won.
@@ -554,6 +566,12 @@ app.post('/stats/match', async (req, res) => {
   if (result !== 'win' && result !== 'loss') { res.status(400).json({ error: 'Invalid match result.' }); return }
   await recordMatch(user.id, result)
   res.json({ ok: true })
+})
+
+app.get('/stats/history', async (req, res) => {
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+  res.json(await getPvpMatchHistory(user.id))
 })
 
 // ─── Diamond wallet & Razorpay payment endpoints ─────────────────────────────

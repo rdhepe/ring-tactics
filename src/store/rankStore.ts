@@ -48,6 +48,8 @@ export interface MatchRecord {
   xpGained:  number
   turns:     number
   timestamp: number
+  opponentUsername?: string
+  reason?: 'completed' | 'forfeit' | 'abandoned'
 }
 
 interface RankStore {
@@ -64,6 +66,8 @@ interface RankStore {
   setDiamonds: (total: number) => void
   /** Refreshes coins/diamonds/unlocked wrestlers from the server-authoritative wallet. Call after login and after any spend/earn event. */
   fetchEconomy: () => Promise<void>
+  /** Refreshes recent PvP results from the server, including disconnect/abandon forfeits. */
+  fetchHistory: () => Promise<void>
   /** Requests a server-validated unlock (coins/diamonds are checked and deducted server-side, never trusting the client). */
   unlockCharacter: (id: string, currency: 'coins' | 'diamonds') => Promise<boolean>
   reset:       () => void
@@ -87,7 +91,7 @@ export const useRankStore = create<RankStore>()(
           xp:      s.xp + gained,
           wins:    result === 'win' ? s.wins + 1 : s.wins,
           losses:  result === 'loss' ? s.losses + 1 : s.losses,
-          history: [{ result, xpGained: gained, turns, timestamp: Date.now() },
+          history: [{ result, xpGained: gained, turns, timestamp: Date.now(), reason: 'completed' as const },
                     ...s.history].slice(0, 30),
         }))
         return { xp: gained, coins: coinsGained }
@@ -103,6 +107,36 @@ export const useRankStore = create<RankStore>()(
           set({ coins: data.coins, diamonds: data.diamonds, unlockedCharacters: data.unlockedCharacters })
         } catch {
           // Offline/unreachable — keep last-known local values.
+        }
+      },
+
+      fetchHistory: async () => {
+        try {
+          const res = await fetch(`${API}/stats/history`, { credentials: 'include' })
+          if (!res.ok) return
+          const data = await res.json() as Array<{
+            id: string
+            result: 'win' | 'loss'
+            opponentUsername: string
+            reason: 'completed' | 'forfeit' | 'abandoned'
+            turns: number
+            playedAt: string
+          }>
+          set({
+            history: data.map(match => {
+              const turns = Math.max(1, match.turns)
+              return {
+                result: match.result,
+                xpGained: calcXp(match.result, turns, match.result === 'win' ? 3 : 0),
+                turns: match.turns,
+                timestamp: new Date(match.playedAt).getTime(),
+                opponentUsername: match.opponentUsername,
+                reason: match.reason,
+              }
+            }),
+          })
+        } catch {
+          // Offline/unreachable — keep last-known local history.
         }
       },
 

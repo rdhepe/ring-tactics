@@ -15,6 +15,17 @@ export interface PlayerStats {
   bestWinStreak: number
 }
 
+export type PvpMatchReason = 'completed' | 'forfeit' | 'abandoned'
+
+export interface PvpMatchHistoryEntry {
+  id: string
+  result: 'win' | 'loss'
+  opponentUsername: string
+  reason: PvpMatchReason
+  turns: number
+  playedAt: string
+}
+
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('DATABASE_URL is required')
 
@@ -72,6 +83,20 @@ export async function initializeDatabase() {
       best_win_streak INTEGER NOT NULL DEFAULT 0 CHECK (best_win_streak >= 0),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS pvp_match_history (
+      id UUID PRIMARY KEY,
+      match_id UUID NOT NULL,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      opponent_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      result TEXT NOT NULL CHECK (result IN ('win', 'loss')),
+      reason TEXT NOT NULL DEFAULT 'completed' CHECK (reason IN ('completed', 'forfeit', 'abandoned')),
+      turns INTEGER NOT NULL DEFAULT 0 CHECK (turns >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS pvp_match_history_user_created_idx ON pvp_match_history(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS pvp_match_history_match_idx ON pvp_match_history(match_id);
 
     CREATE TABLE IF NOT EXISTS wallets (
       user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -238,12 +263,20 @@ export async function recordMatch(userId: string, result: 'win' | 'loss') {
   await recordMatchWithClient(pool, userId, result)
 }
 
-export async function recordPvpMatch(winnerId: string, loserId: string) {
+export async function recordPvpMatch(winnerId: string, loserId: string, opts: { reason?: PvpMatchReason; turns?: number } = {}) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     await recordMatchWithClient(client, winnerId, 'win')
     await recordMatchWithClient(client, loserId, 'loss')
+    const matchId = randomUUID()
+    const reason = opts.reason ?? 'completed'
+    const turns = Math.max(0, Math.floor(opts.turns ?? 0))
+    await client.query(
+      `INSERT INTO pvp_match_history (id, match_id, user_id, opponent_id, result, reason, turns)
+       VALUES ($1, $2, $3, $4, 'win', $5, $6), ($7, $2, $4, $3, 'loss', $5, $6)`,
+      [randomUUID(), matchId, winnerId, loserId, reason, turns, randomUUID()],
+    )
     await client.query('COMMIT')
   } catch (error) {
     await client.query('ROLLBACK')
@@ -251,6 +284,33 @@ export async function recordPvpMatch(winnerId: string, loserId: string) {
   } finally {
     client.release()
   }
+}
+
+export async function getPvpMatchHistory(userId: string, limit = 30): Promise<PvpMatchHistoryEntry[]> {
+  const result = await pool.query<{
+    id: string
+    result: 'win' | 'loss'
+    opponent_username: string
+    reason: PvpMatchReason
+    turns: number
+    played_at: Date
+  }>(
+    `SELECT h.id, h.result, u.username AS opponent_username, h.reason, h.turns, h.created_at AS played_at
+     FROM pvp_match_history h
+     JOIN users u ON u.id = h.opponent_id
+     WHERE h.user_id = $1
+     ORDER BY h.created_at DESC
+     LIMIT $2`,
+    [userId, Math.min(Math.max(limit, 1), 50)],
+  )
+  return result.rows.map(row => ({
+    id: row.id,
+    result: row.result,
+    opponentUsername: row.opponent_username,
+    reason: row.reason,
+    turns: row.turns,
+    playedAt: row.played_at.toISOString(),
+  }))
 }
 
 export async function getLeaderboardStats(): Promise<PlayerStats[]> {

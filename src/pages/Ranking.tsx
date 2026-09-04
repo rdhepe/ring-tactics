@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useRankStore, getRankInfo, RANKS } from '../store/rankStore'
 
 function XpBar({ pct, color }: { pct: number; color: string }) {
@@ -13,9 +14,13 @@ function XpBar({ pct, color }: { pct: number; color: string }) {
 }
 
 export function RankingPage() {
-  const { xp, wins, losses, history, reset } = useRankStore()
+  const { xp, wins, losses, history, reset, fetchHistory } = useRankStore()
   const { rank, index, next, xpInRank, xpNeeded, pct } = getRankInfo(xp)
   const total = wins + losses
+
+  useEffect(() => {
+    void fetchHistory()
+  }, [fetchHistory])
 
   return (
     <div className="arena-page min-h-screen bg-px-base text-px-text">
@@ -141,7 +146,9 @@ export function RankingPage() {
                     {m.result === 'win' ? 'WIN' : 'LOSS'}
                   </span>
                   <span className="text-px-muted text-xs flex-1" style={{ fontFamily: 'monospace' }}>
-                    {m.turns} turns
+                    {m.reason && m.reason !== 'completed' ? `${m.reason.toUpperCase()} · ` : ''}
+                    {m.opponentUsername ? `VS ${m.opponentUsername} · ` : ''}
+                    {m.turns > 0 ? `${m.turns} turns` : 'before bell'}
                   </span>
                   <span className="font-bold text-xs"
                         style={{ color: '#ffd166', fontFamily: "'Press Start 2P', monospace", fontSize: 9 }}>

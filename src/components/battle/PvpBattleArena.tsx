@@ -64,6 +64,7 @@ export function PvpBattleArena({ onReset, isLadder = false }: { onReset: () => v
   const recordMissionMatch = useMissionStore(s => s.recordMatch)
   const addMatch           = useRankStore(s => s.addMatch)
   const fetchEconomy       = useRankStore(s => s.fetchEconomy)
+  const fetchHistory       = useRankStore(s => s.fetchHistory)
 
   const [localQueue,   setLocalQueue]   = useState<QueuedSkill[]>([])
   const [selectedChar, setSelectedChar] = useState(0)
@@ -94,6 +95,7 @@ export function PvpBattleArena({ onReset, isLadder = false }: { onReset: () => v
       setReward(addMatch(result, serverState.turn, survivingAllies))
       // Coins are credited server-side on win; pull the authoritative balance instead of trusting local math.
       void fetchEconomy()
+      void fetchHistory()
     }
   }, [serverState?.phase])
 
