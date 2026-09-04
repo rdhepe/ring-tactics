@@ -214,7 +214,19 @@ const io = new Server(http, {
 
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
-app.use(helmet())
+app.use(helmet({
+  // Default CSP blocks 'self'-only script/frame/connect sources; Razorpay Checkout
+  // needs its script, iframe, and XHR/websocket endpoints allow-listed explicitly.
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'script-src': ["'self'", "'unsafe-inline'", 'https://checkout.razorpay.com'],
+      'frame-src': ["'self'", 'https://checkout.razorpay.com', 'https://api.razorpay.com'],
+      'connect-src': ["'self'", 'https://checkout.razorpay.com', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
+      'img-src': ["'self'", 'data:', 'https://*.razorpay.com'],
+    },
+  },
+}))
 app.use(cors({ origin: allowedOrigins, credentials: true, methods: ['GET', 'POST'] }))
 app.use(express.json({ limit: '16kb' }))
 app.use(cookieParser())
