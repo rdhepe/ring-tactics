@@ -1,6 +1,31 @@
 import { create } from 'zustand'
 import { io, type Socket } from 'socket.io-client'
 import type { BattleState, Character, QueuedSkill } from '../types'
+import { CHARACTER_MAP } from '../data/characters'
+
+// Bot opponents are built server-side from an image-free character mirror (server can't
+// import .jpg assets), so their avatar/skill icons arrive blank over the wire. Fill them
+// in from the real bundled character data (matched by id) before rendering.
+function hydrateCharacter(char: Character): Character {
+  const local = CHARACTER_MAP[char.id]
+  if (!local) return char
+  return {
+    ...char,
+    avatarUrl: char.avatarUrl || local.avatarUrl,
+    skills: char.skills.map(skill => {
+      const localSkill = local.skills.find(s => s.id === skill.id)
+      return localSkill && !skill.iconUrl ? { ...skill, iconUrl: localSkill.iconUrl } : skill
+    }) as Character['skills'],
+  }
+}
+
+function hydrateBattleState(state: BattleState): BattleState {
+  return {
+    ...state,
+    player: { ...state.player, characters: state.player.characters.map(bc => ({ ...bc, character: hydrateCharacter(bc.character) })) },
+    ai:     { ...state.ai,     characters: state.ai.characters.map(bc => ({ ...bc, character: hydrateCharacter(bc.character) })) },
+  }
+}
 
 export type PvpPhase =
   | 'idle'
@@ -95,7 +120,7 @@ export const usePvpStore = create<PvpStore>((set, get) => ({
 
     socket.on('state_update', ({ state }: { state: BattleState }) => {
       const isOver = state.phase === 'victory' || state.phase === 'defeat'
-      set({ battleState: state, pvpPhase: isOver ? 'game_over' : 'battle' })
+      set({ battleState: hydrateBattleState(state), pvpPhase: isOver ? 'game_over' : 'battle' })
     })
 
     socket.on('opponent_disconnected', () =>
