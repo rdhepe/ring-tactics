@@ -15,6 +15,7 @@ import { MissionsPage } from './pages/Missions'
 import { LeaderboardsPage } from './pages/Leaderboards'
 import { LegalPage } from './pages/LegalPage'
 import { DiamondStorePage } from './pages/DiamondStore'
+import { ProfilePage } from './pages/ProfilePage'
 import { useAuthStore } from './store/authStore'
 import { useRankStore } from './store/rankStore'
 import './pages/ArenaTheme.css'
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/pvp"    element={<RequireAuth><PvpLobbyPage /></RequireAuth>} />
             <Route path="/ladder" element={<RequireAuth><LadderPage /></RequireAuth>} />
             <Route path="/store" element={<DiamondStorePage />} />
+            <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
             <Route path="/legal/:slug" element={<LegalPage />} />
           </Routes>
         </div>

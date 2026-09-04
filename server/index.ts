@@ -26,14 +26,19 @@ import {
   deleteSession,
   findUserByUsername,
   getDiamondOrder,
+  getDiamondOrderHistory,
   getEconomyState,
   getLeaderboardStats,
   getUserBySession,
+  getUserPasswordHash,
+  getUserProfile,
   initializeDatabase,
   markDiamondOrderPaidAndCredit,
   recordMatch,
   recordPvpMatch,
   unlockCharacterAtomic,
+  updateUserEmail,
+  updateUserPassword,
   type AuthenticatedUser,
   type PlayerStats,
   pool,
@@ -235,7 +240,7 @@ app.post('/auth/register', authLimiter, async (req, res) => {
     const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 3, parallelism: 1 })
     const user = await createUser(parsed.data.username, passwordHash)
     await issueSession(res, user)
-    res.status(201).json({ username: user.username })
+    res.status(201).json({ username: user.username, email: null })
   } catch (error) {
     if ((error as { code?: string }).code === '23505') { res.status(409).json({ error: 'Username already taken.' }); return }
     throw error
@@ -251,13 +256,15 @@ app.post('/auth/login', authLimiter, async (req, res) => {
     res.status(401).json({ error: 'Invalid username or password.' }); return
   }
   await issueSession(res, user)
-  res.json({ username: user.username })
+  const profile = await getUserProfile(user.id)
+  res.json({ username: user.username, email: profile?.email ?? null })
 })
 
 app.get('/auth/me', async (req, res) => {
   const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
   if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
-  res.json({ username: user.username })
+  const profile = await getUserProfile(user.id)
+  res.json({ username: user.username, email: profile?.email ?? null })
 })
 
 app.post('/auth/logout', async (req, res) => {
@@ -270,6 +277,57 @@ app.post('/auth/logout', async (req, res) => {
     path: '/',
   })
   res.json({ ok: true })
+})
+
+// ─── Profile, password, and transaction history ───────────────────────────────
+
+app.get('/profile', async (req, res) => {
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+  const profile = await getUserProfile(user.id)
+  if (!profile) { res.status(404).json({ error: 'Profile not found.' }); return }
+  res.json(profile)
+})
+
+const emailSchema = z.object({ email: z.email().max(254).nullable() })
+
+app.patch('/profile', authLimiter, async (req, res) => {
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+  const parsed = emailSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Enter a valid email address.' }); return }
+  await updateUserEmail(user.id, parsed.data.email)
+  res.json({ ok: true })
+})
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(12).max(128),
+})
+
+app.post('/auth/change-password', authLimiter, async (req, res) => {
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+  const parsed = changePasswordSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'New password must be 12-128 characters.' }); return }
+
+  const currentHash = await getUserPasswordHash(user.id)
+  const matches = await argon2.verify(currentHash ?? dummyPasswordHash, parsed.data.currentPassword)
+  if (!currentHash || !matches) { res.status(401).json({ error: 'Current password is incorrect.' }); return }
+
+  const newHash = await argon2.hash(parsed.data.newPassword, { type: argon2.argon2id, memoryCost: 19456, timeCost: 3, parallelism: 1 })
+  await updateUserPassword(user.id, newHash)
+  res.json({ ok: true })
+})
+
+app.get('/payments/history', async (req, res) => {
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+  const history = await getDiamondOrderHistory(user.id)
+  res.json(history.map(entry => ({
+    ...entry,
+    packageName: DIAMOND_PACKAGES.find(p => p.id === entry.packageId)?.name ?? entry.packageId,
+  })))
 })
 
 app.post('/stats/match', async (req, res) => {

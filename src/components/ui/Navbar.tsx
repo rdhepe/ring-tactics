@@ -48,10 +48,11 @@ export function Navbar() {
                              background: '#6be8ff22', border: '1px solid #6be8ff44', padding: '3px 10px' }}>
                 💎 {diamonds}
               </Link>
-              <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#38d9a9',
+              <Link to="/profile" title="My Profile"
+                    style={{ fontFamily: 'monospace', fontSize: 10, color: '#38d9a9',
                              background: '#38d9a922', border: '1px solid #38d9a944', padding: '3px 10px' }}>
                 {username}
-              </span>
+              </Link>
               <button
                 onClick={() => { logout(); navigate('/') }}
                 style={{ fontFamily: 'monospace', fontSize: 9, cursor: 'pointer',

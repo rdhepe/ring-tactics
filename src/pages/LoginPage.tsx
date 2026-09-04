@@ -30,9 +30,9 @@ export function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username.trim(), password }),
       })
-      const data = await res.json() as { username?: string; error?: string }
+      const data = await res.json() as { username?: string; email?: string | null; error?: string }
       if (!res.ok) { setError(data.error ?? 'Something went wrong.'); return }
-      login(data.username!)
+      login(data.username!, data.email ?? null)
       navigate(returnTo, { replace: true })
     } catch {
       setError('Cannot reach server. Make sure it is running.')

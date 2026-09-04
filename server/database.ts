@@ -35,6 +35,7 @@ export async function initializeDatabase() {
       username VARCHAR(20) NOT NULL,
       username_normalized VARCHAR(20) NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      email VARCHAR(254),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -88,8 +89,9 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS diamond_orders_user_id_idx ON diamond_orders(user_id);
   `)
 
-  // Migration safety net: add the coins column if this DB was created before it existed.
+  // Migration safety net: add columns for DBs created before they existed.
   await pool.query('ALTER TABLE wallets ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 0')
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(254)')
 
   await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()')
 }
@@ -374,4 +376,65 @@ export async function markDiamondOrderPaidAndCredit(orderId: string, userId: str
   } finally {
     client.release()
   }
+}
+
+// ─── Profile & transaction history ────────────────────────────────────────────
+
+export interface UserProfile {
+  username: string
+  email: string | null
+  createdAt: string
+}
+
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  const result = await pool.query<{ username: string; email: string | null; created_at: string }>(
+    'SELECT username, email, created_at FROM users WHERE id = $1',
+    [userId],
+  )
+  const row = result.rows[0]
+  return row ? { username: row.username, email: row.email, createdAt: row.created_at } : null
+}
+
+export async function getUserPasswordHash(userId: string): Promise<string | null> {
+  const result = await pool.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = $1', [userId])
+  return result.rows[0]?.password_hash ?? null
+}
+
+export async function updateUserPassword(userId: string, passwordHash: string) {
+  await pool.query('UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1', [userId, passwordHash])
+}
+
+export async function updateUserEmail(userId: string, email: string | null) {
+  await pool.query('UPDATE users SET email = $2, updated_at = NOW() WHERE id = $1', [userId, email])
+}
+
+export interface DiamondOrderHistoryEntry {
+  orderId: string
+  packageId: string
+  diamonds: number
+  amountPaise: number
+  status: 'created' | 'paid'
+  createdAt: string
+  paidAt: string | null
+}
+
+export async function getDiamondOrderHistory(userId: string): Promise<DiamondOrderHistoryEntry[]> {
+  const result = await pool.query<{
+    order_id: string; package_id: string; diamonds: number; amount_paise: number
+    status: 'created' | 'paid'; created_at: string; paid_at: string | null
+  }>(
+    `SELECT order_id, package_id, diamonds, amount_paise, status, created_at, paid_at
+     FROM diamond_orders WHERE user_id = $1
+     ORDER BY created_at DESC LIMIT 50`,
+    [userId],
+  )
+  return result.rows.map(row => ({
+    orderId: row.order_id,
+    packageId: row.package_id,
+    diamonds: row.diamonds,
+    amountPaise: row.amount_paise,
+    status: row.status,
+    createdAt: row.created_at,
+    paidAt: row.paid_at,
+  }))
 }
