@@ -22,12 +22,14 @@ import {
   createSession,
   createDiamondOrder,
   createEmailVerificationToken,
+  createPasswordResetToken,
   createPreRegistration,
   createUser,
   creditCoins,
   deleteExpiredSessions,
   deleteSession,
   ensureBotUsers,
+  findUserByEmail,
   findUserByUsername,
   getDiamondOrder,
   getDiamondOrderHistory,
@@ -41,6 +43,7 @@ import {
   markDiamondOrderPaidAndCredit,
   recordMatch,
   recordPvpMatch,
+  resetPasswordWithToken,
   unlockCharacterAtomic,
   updateUserEmail,
   updateUserPassword,
@@ -163,6 +166,72 @@ async function issueEmailVerification(userId: string, email: string, username: s
   await sendVerificationEmail(email, username, verifyUrl).catch(error => console.error('Failed to send verification email', error))
 }
 
+async function sendPasswordResetEmail(toEmail: string, toName: string, resetUrl: string) {
+  if (!brevoApiKey || !brevoSenderEmail) {
+    console.warn('BREVO_API_KEY/BREVO_SENDER_EMAIL not set — skipping password reset email send.')
+    return
+  }
+  const safeName = escapeHtml(toName)
+  const safeResetUrl = escapeHtml(resetUrl)
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': brevoApiKey, 'Content-Type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({
+      sender: { name: brevoSenderName, email: brevoSenderEmail },
+      to: [{ email: toEmail, name: toName }],
+      subject: 'Reset your Ring Tactics password',
+      htmlContent: `<!doctype html>
+        <html>
+          <body style="margin:0;background:#0c0e1a;color:#c8cfe8;font-family:Arial,Helvetica,sans-serif;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0c0e1a;padding:28px 12px;">
+              <tr>
+                <td align="center">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#141726;border:2px solid #2e3755;border-top:6px solid #ffd166;box-shadow:0 12px 0 #070913;">
+                    <tr>
+                      <td style="padding:24px 26px 12px;text-align:center;">
+                        <div style="display:inline-block;padding:6px 10px;background:#1d2235;border:1px solid #f45e3f55;color:#f45e3f;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Locker Room Reset</div>
+                        <h1 style="margin:18px 0 8px;color:#ffffff;font-size:28px;line-height:1.15;text-transform:uppercase;letter-spacing:1px;">Get Back In The Match</h1>
+                        <p style="margin:0;color:#8892b8;font-size:14px;line-height:1.6;">We received a request to reset your Ring Tactics password.</p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:14px 26px 4px;">
+                        <div style="background:#0f1120;border:1px solid #2e3755;padding:18px;">
+                          <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">Hey <strong style="color:#38d9a9;">${safeName}</strong>,</p>
+                          <p style="margin:0 0 16px;font-size:15px;line-height:1.7;">Use the button below to set a fresh password and regain control of your corner. This one-time link expires in 1 hour.</p>
+                          <div style="text-align:center;margin:24px 0;">
+                            <a href="${safeResetUrl}" style="display:inline-block;background:#c42b2b;color:#ffffff;text-decoration:none;font-weight:800;text-transform:uppercase;letter-spacing:1px;padding:14px 22px;border:2px solid #f45e3f;box-shadow:4px 4px 0 #7a1a0a;">Reset Password</a>
+                          </div>
+                          <p style="margin:0;color:#8892b8;font-size:13px;line-height:1.6;">If the button misses the pin, copy and paste this link into your browser:</p>
+                          <p style="margin:10px 0 0;word-break:break-all;font-size:12px;line-height:1.5;"><a href="${safeResetUrl}" style="color:#ffd166;">${safeResetUrl}</a></p>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:18px 26px 26px;">
+                        <p style="margin:0;color:#6f789b;font-size:12px;line-height:1.6;text-align:center;">If you did not request this, ignore the email. Your current password stays active unless this link is used.</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>`,
+      textContent: `Hey ${toName},\n\nWe received a request to reset your Ring Tactics password. Use this one-time link within 1 hour to set a fresh password and get back in the match.\n\nReset your password: ${resetUrl}\n\nIf you did not request this, ignore this email. Your current password stays active unless the link is used.`,
+    }),
+  })
+  if (!res.ok) console.error('Brevo password reset send failed', res.status, await res.text().catch(() => ''))
+}
+
+async function issuePasswordReset(userId: string, email: string, username: string) {
+  const rawToken = randomBytes(32).toString('base64url')
+  const tokenHash = createHash('sha256').update(rawToken).digest('hex')
+  await createPasswordResetToken(userId, tokenHash, new Date(Date.now() + 60 * 60 * 1000))
+  const resetUrl = `${primaryAppOrigin}/reset-password?token=${rawToken}`
+  await sendPasswordResetEmail(email, username, resetUrl).catch(error => console.error('Failed to send password reset email', error))
+}
+
 const registerSchema = z.object({
   username: z.string().trim().regex(/^[a-zA-Z0-9_-]{3,20}$/),
   password: z.string().min(12).max(128),
@@ -170,6 +239,11 @@ const registerSchema = z.object({
 })
 const loginCredentialsSchema = z.object({
   username: z.string().trim().regex(/^[a-zA-Z0-9_-]{3,20}$/),
+  password: z.string().min(12).max(128),
+})
+const forgotPasswordSchema = z.object({ email: z.email().max(254) })
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
   password: z.string().min(12).max(128),
 })
 const dummyPasswordHash = await argon2.hash(randomBytes(32), {
@@ -514,6 +588,24 @@ app.post('/auth/login', authLimiter, async (req, res) => {
   await issueSession(res, user)
   const profile = await getUserProfile(user.id)
   res.json({ username: user.username, email: profile?.email ?? null, emailVerified: profile?.emailVerified ?? false })
+})
+
+app.post('/auth/forgot-password', authLimiter, async (req, res) => {
+  const parsed = forgotPasswordSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Enter a valid email address.' }); return }
+  const user = await findUserByEmail(parsed.data.email)
+  if (user?.email) await issuePasswordReset(user.id, user.email, user.username)
+  res.json({ ok: true })
+})
+
+app.post('/auth/reset-password', authLimiter, async (req, res) => {
+  const parsed = resetPasswordSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Password must be 12-128 characters.' }); return }
+  const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 3, parallelism: 1 })
+  const tokenHash = createHash('sha256').update(parsed.data.token).digest('hex')
+  const result = await resetPasswordWithToken(tokenHash, passwordHash)
+  if (!result) { res.status(400).json({ error: 'This reset link is invalid or has expired.' }); return }
+  res.json({ ok: true, username: result.username })
 })
 
 app.get('/auth/me', async (req, res) => {

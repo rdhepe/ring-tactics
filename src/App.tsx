@@ -17,6 +17,8 @@ import { LegalPage } from './pages/LegalPage'
 import { DiamondStorePage } from './pages/DiamondStore'
 import { ProfilePage } from './pages/ProfilePage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { PreRegisterPage } from './pages/PreRegisterPage'
 import { TutorialPage } from './pages/TutorialPage'
 import { ComingSoonPage } from './pages/ComingSoonPage'
@@ -75,6 +77,8 @@ export default function App() {
             <Route path="/ranking" element={<RequireAuth><RankingPage /></RequireAuth>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/battle" element={<RequireAuth requireVerified><BattlePage /></RequireAuth>} />
             <Route path="/pvp"    element={<RequireAuth requireVerified><PvpLobbyPage /></RequireAuth>} />
             <Route path="/ladder" element={<RequireAuth requireVerified><LadderPage /></RequireAuth>} />

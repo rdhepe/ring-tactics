@@ -26,6 +26,10 @@ export interface PvpMatchHistoryEntry {
   playedAt: string
 }
 
+export interface PasswordResetUser extends AuthenticatedUser {
+  email: string
+}
+
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('DATABASE_URL is required')
 
@@ -62,6 +66,16 @@ export async function initializeDatabase() {
     );
 
     CREATE INDEX IF NOT EXISTS email_verification_tokens_user_id_idx ON email_verification_tokens(user_id);
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      token_hash CHAR(64) PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS password_reset_tokens_user_id_idx ON password_reset_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_at_idx ON password_reset_tokens(expires_at);
 
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash CHAR(64) PRIMARY KEY,
@@ -138,6 +152,7 @@ export async function initializeDatabase() {
 
   await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()')
   await pool.query('DELETE FROM email_verification_tokens WHERE expires_at <= NOW()')
+  await pool.query('DELETE FROM password_reset_tokens WHERE expires_at <= NOW()')
 }
 
 export function normalizeUsername(username: string) {
@@ -148,6 +163,14 @@ export async function findUserByUsername(username: string) {
   const result = await pool.query<AuthenticatedUser & { password_hash: string }>(
     'SELECT id, username, password_hash FROM users WHERE username_normalized = $1',
     [normalizeUsername(username)],
+  )
+  return result.rows[0] ?? null
+}
+
+export async function findUserByEmail(email: string): Promise<PasswordResetUser | null> {
+  const result = await pool.query<PasswordResetUser>(
+    'SELECT id, username, email FROM users WHERE LOWER(email) = LOWER($1)',
+    [email.trim()],
   )
   return result.rows[0] ?? null
 }
@@ -515,6 +538,39 @@ export async function getUserPasswordHash(userId: string): Promise<string | null
 
 export async function updateUserPassword(userId: string, passwordHash: string) {
   await pool.query('UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1', [userId, passwordHash])
+}
+
+export async function createPasswordResetToken(userId: string, tokenHash: string, expiresAt: Date) {
+  await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId])
+  await pool.query(
+    'INSERT INTO password_reset_tokens (token_hash, user_id, expires_at) VALUES ($1, $2, $3)',
+    [tokenHash, userId, expiresAt],
+  )
+}
+
+export async function resetPasswordWithToken(tokenHash: string, passwordHash: string): Promise<{ userId: string; username: string } | null> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const deleted = await client.query<{ user_id: string }>(
+      `DELETE FROM password_reset_tokens WHERE token_hash = $1 AND expires_at > NOW() RETURNING user_id`,
+      [tokenHash],
+    )
+    const userId = deleted.rows[0]?.user_id
+    if (!userId) { await client.query('ROLLBACK'); return null }
+    const updated = await client.query<{ username: string }>(
+      'UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1 RETURNING username',
+      [userId, passwordHash],
+    )
+    await client.query('DELETE FROM sessions WHERE user_id = $1', [userId])
+    await client.query('COMMIT')
+    return updated.rows[0] ? { userId, username: updated.rows[0].username } : null
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 export async function updateUserEmail(userId: string, email: string | null) {

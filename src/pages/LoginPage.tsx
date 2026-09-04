@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore, API } from '../store/authStore'
 
 type Mode = 'login' | 'register'
@@ -148,6 +148,12 @@ export function LoginPage() {
               <p style={{ fontFamily: 'monospace', fontSize: 9, color: '#4a5578', margin: 0 }}>
                 Use at least 12 characters. We'll send a verification link to your email.
               </p>
+            )}
+
+            {mode === 'login' && (
+              <Link to="/forgot-password" style={{ alignSelf: 'flex-end', color: '#8892b8', fontFamily: 'monospace', fontSize: 10, textDecoration: 'underline' }}>
+                Forgot password?
+              </Link>
             )}
 
             <button className="arena-action" type="submit" disabled={loading}
