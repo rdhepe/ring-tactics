@@ -325,6 +325,24 @@ function startBotMatch(io: Server, socketId: string) {
   console.log(`Ladder match ${code}: ${socketId} vs bot ${bot.username}`)
 }
 
+function enqueueForMatchmaking(io: Server, socket: Socket) {
+  if (matchQueue.includes(socket.id)) return
+  matchQueue.push(socket.id)
+  socket.emit('searching')
+  console.log(`${socket.id} entered matchmaking queue (${matchQueue.length} waiting)`)
+
+  clearBotFallback(socket.id)
+  const delay = MATCHMAKING_BOT_FALLBACK_MIN_MS + Math.random() * MATCHMAKING_BOT_FALLBACK_JITTER_MS
+  const timer = setTimeout(() => {
+    botFallbackTimers.delete(socket.id)
+    const qi = matchQueue.indexOf(socket.id)
+    if (qi < 0) return // already matched with a real opponent or left the queue
+    matchQueue.splice(qi, 1)
+    startBotMatch(io, socket.id)
+  }, delay)
+  botFallbackTimers.set(socket.id, timer)
+}
+
 // ─── Server ───────────────────────────────────────────────────────────────────
 
 const app = express()
@@ -701,7 +719,7 @@ io.on('connection', (socket: Socket) => {
       const oppId = matchQueue.shift()!
       clearBotFallback(oppId)
       const opp   = io.sockets.sockets.get(oppId)
-      if (!opp?.connected) { matchQueue.push(socket.id); socket.emit('searching'); return }
+      if (!opp?.connected) { enqueueForMatchmaking(io, socket); return }
       const code = generateCode()
       const room: Room = {
         code,
@@ -718,18 +736,7 @@ io.on('connection', (socket: Socket) => {
       io.to(socket.id).emit('match_found', { code, slot: 'p2', opponentUsername: socketToUser.get(oppId)?.username ?? 'Opponent' })
       console.log(`Ladder match ${code}: ${oppId} vs ${socket.id}`)
     } else {
-      matchQueue.push(socket.id)
-      socket.emit('searching')
-      console.log(`${socket.id} entered matchmaking queue (${matchQueue.length} waiting)`)
-      const delay = MATCHMAKING_BOT_FALLBACK_MIN_MS + Math.random() * MATCHMAKING_BOT_FALLBACK_JITTER_MS
-      const timer = setTimeout(() => {
-        botFallbackTimers.delete(socket.id)
-        const qi = matchQueue.indexOf(socket.id)
-        if (qi < 0) return // already matched with a real opponent or left the queue
-        matchQueue.splice(qi, 1)
-        startBotMatch(io, socket.id)
-      }, delay)
-      botFallbackTimers.set(socket.id, timer)
+      enqueueForMatchmaking(io, socket)
     }
   })
 
