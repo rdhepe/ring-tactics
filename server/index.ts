@@ -77,22 +77,79 @@ const allowedOrigins = (process.env.APP_ORIGIN ?? `http://localhost:5173,http://
 // The origin used to build links inside emails (verification, etc.) — the first configured app origin.
 const primaryAppOrigin = allowedOrigins[0] ?? 'http://localhost:5173'
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]!))
+}
+
 async function sendVerificationEmail(toEmail: string, toName: string, verifyUrl: string) {
   if (!brevoApiKey || !brevoSenderEmail) {
     console.warn('BREVO_API_KEY/BREVO_SENDER_EMAIL not set — skipping verification email send.')
     return
   }
+  const safeName = escapeHtml(toName)
+  const safeVerifyUrl = escapeHtml(verifyUrl)
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': brevoApiKey, 'Content-Type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({
       sender: { name: brevoSenderName, email: brevoSenderEmail },
       to: [{ email: toEmail, name: toName }],
-      subject: 'Verify your Ring Tactics email',
-      htmlContent: `<p>Hi ${toName},</p>
-        <p>Confirm your email address to finish setting up your Ring Tactics account:</p>
-        <p><a href="${verifyUrl}">${verifyUrl}</a></p>
-        <p>This link expires in 24 hours. If you didn't create this account, you can ignore this email.</p>`,
+      subject: 'Step into the ring: verify your Ring Tactics email',
+      htmlContent: `<!doctype html>
+        <html>
+          <body style="margin:0;background:#0c0e1a;color:#c8cfe8;font-family:Arial,Helvetica,sans-serif;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0c0e1a;padding:28px 12px;">
+              <tr>
+                <td align="center">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#141726;border:2px solid #2e3755;border-top:6px solid #c42b2b;box-shadow:0 12px 0 #070913;">
+                    <tr>
+                      <td style="padding:24px 26px 12px;text-align:center;">
+                        <div style="display:inline-block;padding:6px 10px;background:#1d2235;border:1px solid #ffd16655;color:#ffd166;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Main Event Access</div>
+                        <h1 style="margin:18px 0 8px;color:#ffffff;font-size:28px;line-height:1.15;text-transform:uppercase;letter-spacing:1px;">Welcome to Ring Tactics</h1>
+                        <p style="margin:0;color:#8892b8;font-size:14px;line-height:1.6;">Your locker room is ready. One quick verification and you're cleared to enter the arena.</p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:14px 26px 4px;">
+                        <div style="background:#0f1120;border:1px solid #2e3755;padding:18px;">
+                          <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">Hey <strong style="color:#38d9a9;">${safeName}</strong>,</p>
+                          <p style="margin:0 0 16px;font-size:15px;line-height:1.7;">Before the bell rings, confirm your email to secure your Ring Tactics account. Verification unlocks your match entry, ladder progress, rewards, and account recovery.</p>
+                          <div style="text-align:center;margin:24px 0;">
+                            <a href="${safeVerifyUrl}" style="display:inline-block;background:#c42b2b;color:#ffffff;text-decoration:none;font-weight:800;text-transform:uppercase;letter-spacing:1px;padding:14px 22px;border:2px solid #f45e3f;box-shadow:4px 4px 0 #7a1a0a;">Verify Email</a>
+                          </div>
+                          <p style="margin:0;color:#8892b8;font-size:13px;line-height:1.6;">This link expires in 24 hours. If the button gets counted out, copy and paste this ringside link into your browser:</p>
+                          <p style="margin:10px 0 0;word-break:break-all;font-size:12px;line-height:1.5;"><a href="${safeVerifyUrl}" style="color:#ffd166;">${safeVerifyUrl}</a></p>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:18px 26px 26px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td style="width:33.33%;padding:8px;text-align:center;border-right:1px solid #2e3755;">
+                              <div style="color:#38d9a9;font-weight:800;font-size:18px;">1</div>
+                              <div style="color:#8892b8;font-size:11px;text-transform:uppercase;letter-spacing:.8px;">Verify</div>
+                            </td>
+                            <td style="width:33.33%;padding:8px;text-align:center;border-right:1px solid #2e3755;">
+                              <div style="color:#ffd166;font-weight:800;font-size:18px;">2</div>
+                              <div style="color:#8892b8;font-size:11px;text-transform:uppercase;letter-spacing:.8px;">Build Team</div>
+                            </td>
+                            <td style="width:33.33%;padding:8px;text-align:center;">
+                              <div style="color:#f45e3f;font-weight:800;font-size:18px;">3</div>
+                              <div style="color:#8892b8;font-size:11px;text-transform:uppercase;letter-spacing:.8px;">Climb Ladder</div>
+                            </td>
+                          </tr>
+                        </table>
+                        <p style="margin:20px 0 0;color:#6f789b;font-size:12px;line-height:1.6;text-align:center;">If you didn't create this account, you can ignore this email and stay outside the ring.</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>`,
+      textContent: `Hey ${toName},\n\nWelcome to Ring Tactics. Before the bell rings, verify your email to secure your account and unlock match entry, ladder progress, rewards, and account recovery.\n\nVerify your email: ${verifyUrl}\n\nThis link expires in 24 hours. If you didn't create this account, you can ignore this email.`,
     }),
   })
   if (!res.ok) console.error('Brevo send failed', res.status, await res.text().catch(() => ''))
