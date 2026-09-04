@@ -246,6 +246,31 @@ async function executeTurn(io: Server, room: Room, queue: QueuedSkill[]) {
   startTurn(io, room)
 }
 
+/**
+ * If a match was already in progress, disconnecting always forfeits the match to the
+ * remaining player — regardless of who was ahead on HP — and records it exactly like a
+ * normal win/loss. If the match hadn't started yet (still selecting teams), it's treated
+ * as a plain disconnect with no stats recorded.
+ */
+async function handleDisconnectForfeit(io: Server, room: Room, disconnectedSocketId: string) {
+  if (!room.state || room.resultRecorded || !room.p1 || !room.p2) {
+    io.to(room.code).emit('opponent_disconnected')
+    return
+  }
+  if (room.state.phase !== 'player_turn') return // match already concluded normally
+
+  room.resultRecorded = true
+  const p1Disconnected = room.p1.socketId === disconnectedSocketId
+  const winnerId = p1Disconnected ? room.p2.userId : room.p1.userId
+  const loserId  = p1Disconnected ? room.p1.userId : room.p2.userId
+  await recordPvpMatch(winnerId, loserId)
+  if (room.isLadder) await creditCoins(winnerId, COINS_PER_LADDER_WIN)
+
+  // room.state is always from p1's perspective; flip the phase to match who actually won.
+  room.state = { ...room.state, phase: p1Disconnected ? 'defeat' : 'victory' }
+  emit(io, room)
+}
+
 // ─── Server ───────────────────────────────────────────────────────────────────
 
 const app = express()
@@ -731,7 +756,7 @@ io.on('connection', (socket: Socket) => {
     const room = rooms.get(code)
     if (room) {
       clearTimer(room)
-      io.to(code).emit('opponent_disconnected')
+      void handleDisconnectForfeit(io, room, socket.id)
       rooms.delete(code)
     }
     socketToRoom.delete(socket.id)
