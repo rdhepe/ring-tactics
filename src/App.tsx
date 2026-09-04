@@ -52,9 +52,9 @@ export default function App() {
             <Route path="/ranking" element={<RequireAuth><RankingPage /></RequireAuth>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
-            <Route path="/battle" element={<RequireAuth><BattlePage /></RequireAuth>} />
-            <Route path="/pvp"    element={<RequireAuth><PvpLobbyPage /></RequireAuth>} />
-            <Route path="/ladder" element={<RequireAuth><LadderPage /></RequireAuth>} />
+            <Route path="/battle" element={<RequireAuth requireVerified><BattlePage /></RequireAuth>} />
+            <Route path="/pvp"    element={<RequireAuth requireVerified><PvpLobbyPage /></RequireAuth>} />
+            <Route path="/ladder" element={<RequireAuth requireVerified><LadderPage /></RequireAuth>} />
             <Route path="/store" element={<DiamondStorePage />} />
             <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
             <Route path="/legal/:slug" element={<LegalPage />} />

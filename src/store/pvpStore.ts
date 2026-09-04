@@ -62,6 +62,8 @@ export const usePvpStore = create<PvpStore>((set, get) => ({
     socket.on('connect_error', (err) =>
       set({ pvpPhase: 'error', errorMsg: err.message === 'not_authenticated'
         ? 'Session expired. Please log in again.'
+        : err.message === 'email_not_verified'
+        ? 'Verify your email before playing. Check your profile to resend the link.'
         : 'Cannot reach PvP server. Run: npm run server' }))
 
     socket.on('room_created',  ({ code, slot }: { code: string; slot: 'p1'|'p2' }) =>

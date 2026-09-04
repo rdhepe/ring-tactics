@@ -419,6 +419,8 @@ app.post('/stats/match', async (req, res) => {
   const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
   const result = req.body?.result as 'win' | 'loss' | undefined
   if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+  const profile = await getUserProfile(user.id)
+  if (!profile?.emailVerified) { res.status(403).json({ error: 'Verify your email before playing.' }); return }
   if (result !== 'win' && result !== 'loss') { res.status(400).json({ error: 'Invalid match result.' }); return }
   await recordMatch(user.id, result)
   res.json({ ok: true })
@@ -556,8 +558,10 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 
 io.use((socket, next) => {
   const token = parseCookie(socket.handshake.headers.cookie ?? '')[SESSION_COOKIE]
-  void getUserBySession(token ?? '').then(user => {
+  void getUserBySession(token ?? '').then(async user => {
     if (!user) { next(new Error('not_authenticated')); return }
+    const profile = await getUserProfile(user.id)
+    if (!profile?.emailVerified) { next(new Error('email_not_verified')); return }
     socketToUser.set(socket.id, user)
     socket.data.sessionToken = token
     next()
