@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { ALL_CHARACTERS } from '../../data/characters'
 import { CharacterCard } from '../characters/CharacterCard'
 import { CharacterDetail } from '../characters/CharacterDetail'
+import { FREE_RARITIES } from '../../data/economy'
+import { useRankStore } from '../../store/rankStore'
 import type { Character } from '../../types'
 
 const MAX_TEAM = 3
@@ -11,8 +13,11 @@ interface TeamSelectProps { onStart: (team: Character[]) => void; onBack?: () =>
 export function TeamSelect({ onStart, onBack }: TeamSelectProps) {
   const [team,    setTeam]    = useState<Character[]>([])
   const [preview, setPreview] = useState<Character | null>(ALL_CHARACTERS[0])
+  const unlockedCharacters = useRankStore(s => s.unlockedCharacters)
 
   function toggleChar(c: Character) {
+    const isLocked = !FREE_RARITIES.includes(c.rarity) && !unlockedCharacters.includes(c.id)
+    if (isLocked) return
     setTeam(prev => {
       if (prev.find(x => x.id === c.id)) return prev.filter(x => x.id !== c.id)
       if (prev.length >= MAX_TEAM) return prev

@@ -59,7 +59,37 @@ export async function initializeDatabase() {
       best_win_streak INTEGER NOT NULL DEFAULT 0 CHECK (best_win_streak >= 0),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS wallets (
+      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      coins INTEGER NOT NULL DEFAULT 0 CHECK (coins >= 0),
+      diamonds INTEGER NOT NULL DEFAULT 0 CHECK (diamonds >= 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS unlocked_characters (
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      character_id TEXT NOT NULL,
+      unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, character_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS diamond_orders (
+      order_id TEXT PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      package_id TEXT NOT NULL,
+      diamonds INTEGER NOT NULL CHECK (diamonds > 0),
+      amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+      status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'paid')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      paid_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS diamond_orders_user_id_idx ON diamond_orders(user_id);
   `)
+
+  // Migration safety net: add the coins column if this DB was created before it existed.
+  await pool.query('ALTER TABLE wallets ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 0')
 
   await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()')
 }
@@ -88,6 +118,7 @@ export async function createUser(username: string, passwordHash: string): Promis
       [id, username.trim(), normalizeUsername(username), passwordHash],
     )
     await client.query('INSERT INTO player_stats (user_id) VALUES ($1)', [id])
+    await client.query('INSERT INTO wallets (user_id) VALUES ($1)', [id])
     await client.query('COMMIT')
     return result.rows[0]
   } catch (error) {
@@ -190,4 +221,157 @@ export async function getLeaderboardStats(): Promise<PlayerStats[]> {
     currentWinStreak: row.current_win_streak,
     bestWinStreak: row.best_win_streak,
   }))
+}
+
+// ─── Diamond wallet & Razorpay orders ─────────────────────────────────────────
+
+export interface EconomyState {
+  coins: number
+  diamonds: number
+  unlockedCharacters: string[]
+}
+
+async function ensureWallet(userId: string) {
+  await pool.query('INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [userId])
+}
+
+export async function getEconomyState(userId: string): Promise<EconomyState> {
+  await ensureWallet(userId)
+  const [wallet, unlocks] = await Promise.all([
+    pool.query<{ coins: number; diamonds: number }>('SELECT coins, diamonds FROM wallets WHERE user_id = $1', [userId]),
+    pool.query<{ character_id: string }>('SELECT character_id FROM unlocked_characters WHERE user_id = $1', [userId]),
+  ])
+  return {
+    coins: wallet.rows[0]?.coins ?? 0,
+    diamonds: wallet.rows[0]?.diamonds ?? 0,
+    unlockedCharacters: unlocks.rows.map(r => r.character_id),
+  }
+}
+
+export async function getWalletDiamonds(userId: string): Promise<number> {
+  const result = await pool.query<{ diamonds: number }>(
+    `INSERT INTO wallets (user_id) VALUES ($1)
+     ON CONFLICT (user_id) DO NOTHING
+     RETURNING diamonds`,
+    [userId],
+  )
+  if (result.rows[0]) return result.rows[0].diamonds
+  const existing = await pool.query<{ diamonds: number }>('SELECT diamonds FROM wallets WHERE user_id = $1', [userId])
+  return existing.rows[0]?.diamonds ?? 0
+}
+
+/** Credits coins to a user's wallet (e.g. a ladder match win). Never trust a client-supplied amount. */
+export async function creditCoins(userId: string, amount: number): Promise<void> {
+  if (amount <= 0) return
+  await ensureWallet(userId)
+  await pool.query('UPDATE wallets SET coins = coins + $2, updated_at = NOW() WHERE user_id = $1', [userId, amount])
+}
+
+export type UnlockResult =
+  | { status: 'unlocked' | 'already_unlocked'; coins: number; diamonds: number }
+  | { status: 'insufficient_funds' }
+
+/** Atomically validates funds, deducts the cost, and records the unlock — safe against double-submits and race conditions. */
+export async function unlockCharacterAtomic(
+  userId: string,
+  characterId: string,
+  currency: 'coins' | 'diamonds',
+  cost: number,
+): Promise<UnlockResult> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [userId])
+
+    const already = await client.query(
+      'SELECT 1 FROM unlocked_characters WHERE user_id = $1 AND character_id = $2',
+      [userId, characterId],
+    )
+    if (already.rows[0]) {
+      const wallet = await client.query<{ coins: number; diamonds: number }>(
+        'SELECT coins, diamonds FROM wallets WHERE user_id = $1', [userId],
+      )
+      await client.query('COMMIT')
+      return { status: 'already_unlocked', coins: wallet.rows[0].coins, diamonds: wallet.rows[0].diamonds }
+    }
+
+    const column = currency === 'coins' ? 'coins' : 'diamonds'
+    const deducted = await client.query<{ coins: number; diamonds: number }>(
+      `UPDATE wallets SET ${column} = ${column} - $2, updated_at = NOW()
+       WHERE user_id = $1 AND ${column} >= $2
+       RETURNING coins, diamonds`,
+      [userId, cost],
+    )
+    if (!deducted.rows[0]) {
+      await client.query('ROLLBACK')
+      return { status: 'insufficient_funds' }
+    }
+
+    await client.query(
+      'INSERT INTO unlocked_characters (user_id, character_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [userId, characterId],
+    )
+    await client.query('COMMIT')
+    return { status: 'unlocked', coins: deducted.rows[0].coins, diamonds: deducted.rows[0].diamonds }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function createDiamondOrder(orderId: string, userId: string, packageId: string, diamonds: number, amountPaise: number) {
+  await pool.query(
+    `INSERT INTO diamond_orders (order_id, user_id, package_id, diamonds, amount_paise)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [orderId, userId, packageId, diamonds, amountPaise],
+  )
+}
+
+export interface DiamondOrder {
+  orderId: string
+  userId: string
+  diamonds: number
+  status: 'created' | 'paid'
+}
+
+export async function getDiamondOrder(orderId: string): Promise<DiamondOrder | null> {
+  const result = await pool.query<{ order_id: string; user_id: string; diamonds: number; status: 'created' | 'paid' }>(
+    'SELECT order_id, user_id, diamonds, status FROM diamond_orders WHERE order_id = $1',
+    [orderId],
+  )
+  const row = result.rows[0]
+  return row ? { orderId: row.order_id, userId: row.user_id, diamonds: row.diamonds, status: row.status } : null
+}
+
+/** Marks the order paid and credits the wallet, atomically and exactly once (safe against webhook/client double calls). */
+export async function markDiamondOrderPaidAndCredit(orderId: string, userId: string): Promise<number | null> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const updated = await client.query<{ diamonds: number }>(
+      `UPDATE diamond_orders SET status = 'paid', paid_at = NOW()
+       WHERE order_id = $1 AND user_id = $2 AND status = 'created'
+       RETURNING diamonds`,
+      [orderId, userId],
+    )
+    if (!updated.rows[0]) {
+      await client.query('ROLLBACK')
+      return null
+    }
+    const credited = await client.query<{ diamonds: number }>(
+      `UPDATE wallets SET diamonds = diamonds + $2, updated_at = NOW()
+       WHERE user_id = $1
+       RETURNING diamonds`,
+      [userId, updated.rows[0].diamonds],
+    )
+    await client.query('COMMIT')
+    return credited.rows[0]?.diamonds ?? null
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }

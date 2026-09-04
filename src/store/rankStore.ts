@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { COINS_PER_LADDER_WIN } from '../data/economy'
+import { API } from './authStore'
 
 // ─── Rank definitions ─────────────────────────────────────────────────────────
 
@@ -39,9 +41,6 @@ export function calcXp(result: 'win' | 'loss', turns: number, survivingAllies: n
   return xp
 }
 
-/** Coins awarded for winning a ladder match. */
-export const COINS_PER_LADDER_WIN = 50
-
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export interface MatchRecord {
@@ -52,35 +51,40 @@ export interface MatchRecord {
 }
 
 interface RankStore {
-  xp:       number
-  coins:    number
-  diamonds: number
-  wins:     number
-  losses:   number
-  history:  MatchRecord[]
-  /** Only ladder matches should call this — it grants XP/rank progress and, on a win, coins. */
+  xp:                 number
+  coins:              number
+  diamonds:           number
+  wins:               number
+  losses:             number
+  history:            MatchRecord[]
+  unlockedCharacters: string[]
+  /** Only ladder matches should call this — it grants XP/rank progress (cosmetic; coins are credited server-side). */
   addMatch: (result: 'win' | 'loss', turns: number, survivingAllies: number) => { xp: number; coins: number }
-  /** Placeholder for real-money diamond purchases — payment integration TBD. */
-  buyDiamonds: (amount: number) => void
+  /** Overwrites the local diamond balance with the server-authoritative wallet total (e.g. after a verified purchase). */
+  setDiamonds: (total: number) => void
+  /** Refreshes coins/diamonds/unlocked wrestlers from the server-authoritative wallet. Call after login and after any spend/earn event. */
+  fetchEconomy: () => Promise<void>
+  /** Requests a server-validated unlock (coins/diamonds are checked and deducted server-side, never trusting the client). */
+  unlockCharacter: (id: string, currency: 'coins' | 'diamonds') => Promise<boolean>
   reset:       () => void
 }
 
 export const useRankStore = create<RankStore>()(
   persist(
     (set) => ({
-      xp:       0,
-      coins:    0,
-      diamonds: 0,
-      wins:     0,
-      losses:   0,
-      history:  [],
+      xp:                 0,
+      coins:              0,
+      diamonds:           0,
+      wins:               0,
+      losses:             0,
+      history:            [],
+      unlockedCharacters: [],
 
       addMatch: (result, turns, survivingAllies) => {
         const gained = calcXp(result, turns, survivingAllies)
         const coinsGained = result === 'win' ? COINS_PER_LADDER_WIN : 0
         set(s => ({
           xp:      s.xp + gained,
-          coins:   s.coins + coinsGained,
           wins:    result === 'win' ? s.wins + 1 : s.wins,
           losses:  result === 'loss' ? s.losses + 1 : s.losses,
           history: [{ result, xpGained: gained, turns, timestamp: Date.now() },
@@ -89,9 +93,41 @@ export const useRankStore = create<RankStore>()(
         return { xp: gained, coins: coinsGained }
       },
 
-      buyDiamonds: (amount) => set(s => ({ diamonds: s.diamonds + amount })),
+      setDiamonds: (total) => set({ diamonds: total }),
 
-      reset: () => set({ xp: 0, coins: 0, diamonds: 0, wins: 0, losses: 0, history: [] }),
+      fetchEconomy: async () => {
+        try {
+          const res = await fetch(`${API}/economy`, { credentials: 'include' })
+          if (!res.ok) return
+          const data = await res.json() as { coins: number; diamonds: number; unlockedCharacters: string[] }
+          set({ coins: data.coins, diamonds: data.diamonds, unlockedCharacters: data.unlockedCharacters })
+        } catch {
+          // Offline/unreachable — keep last-known local values.
+        }
+      },
+
+      unlockCharacter: async (id, currency) => {
+        try {
+          const res = await fetch(`${API}/economy/unlock`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ characterId: id, currency }),
+          })
+          if (!res.ok) return false
+          const data = await res.json() as { coins: number; diamonds: number; unlocked: boolean }
+          set(s => ({
+            coins: data.coins,
+            diamonds: data.diamonds,
+            unlockedCharacters: s.unlockedCharacters.includes(id) ? s.unlockedCharacters : [...s.unlockedCharacters, id],
+          }))
+          return data.unlocked
+        } catch {
+          return false
+        }
+      },
+
+      reset: () => set({ xp: 0, coins: 0, diamonds: 0, wins: 0, losses: 0, history: [], unlockedCharacters: [] }),
     }),
     { name: 'slam-arena-rank' }
   )

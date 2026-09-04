@@ -1,5 +1,7 @@
 import type { Character } from '../../types'
 import { getRarityColor } from '../ui/RarityBadge'
+import { UNLOCK_COST, FREE_RARITIES } from '../../data/economy'
+import { useRankStore } from '../../store/rankStore'
 
 interface CharacterCardProps {
   character: Character
@@ -9,6 +11,10 @@ interface CharacterCardProps {
 
 export function CharacterCard({ character, selected, onClick }: CharacterCardProps) {
   const rc = getRarityColor(character.rarity)
+  const unlockedCharacters = useRankStore(s => s.unlockedCharacters)
+  const isLocked = !FREE_RARITIES.includes(character.rarity) && !unlockedCharacters.includes(character.id)
+  const cost = UNLOCK_COST[character.rarity]
+
   return (
     <button
       onClick={onClick}
@@ -23,16 +29,24 @@ export function CharacterCard({ character, selected, onClick }: CharacterCardPro
       <div className="h-0.5 w-full" style={{ background: rc }} />
 
       {/* avatar */}
-      <div className="pt-5 pb-4 px-4 flex justify-center">
+      <div className="pt-5 pb-4 px-4 flex justify-center relative">
         <div
           className={`w-32 h-32 flex items-center justify-center text-4xl font-bold text-white overflow-hidden ${character.avatarColor}`}
-          style={{ border: `2px solid ${rc}55` }}
+          style={{ border: `2px solid ${rc}55`, filter: isLocked ? 'grayscale(1) brightness(.5)' : 'none' }}
         >
           {character.avatarUrl
             ? <img src={character.avatarUrl} alt="" className="w-full h-full object-cover" />
             : character.name[0]
           }
         </div>
+        {isLocked && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+            <span style={{ fontSize: 28 }}>🔒</span>
+            <span className="text-px-gold text-[10px] font-bold" style={{ fontFamily: 'monospace' }}>
+              {cost.coins ? `${cost.coins} 🪙` : `${cost.diamonds} 💎`}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* info */}

@@ -4,7 +4,7 @@ import { createServer } from 'http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Server, type Socket } from 'socket.io'
-import { randomBytes } from 'crypto'
+import { randomBytes, createHmac, timingSafeEqual } from 'crypto'
 import argon2 from 'argon2'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
@@ -12,19 +12,28 @@ import helmet from 'helmet'
 import { rateLimit } from 'express-rate-limit'
 import { parseCookie } from 'cookie'
 import { z } from 'zod'
+import Razorpay from 'razorpay'
 import { initBattle, resolveSinglePlayerTurn, switchCombatMode } from '../src/engine/battle.js'
 import type { BattleState, Character, QueuedSkill, BattlePhase, TeamId } from '../src/types/index.js'
+import { DIAMOND_PACKAGES, UNLOCK_COST, FREE_RARITIES, COINS_PER_LADDER_WIN } from '../src/data/economy.js'
+import { CHARACTER_RARITY } from '../src/data/characterRarities.js'
 import {
   createSession,
+  createDiamondOrder,
   createUser,
+  creditCoins,
   deleteExpiredSessions,
   deleteSession,
   findUserByUsername,
+  getDiamondOrder,
+  getEconomyState,
   getLeaderboardStats,
   getUserBySession,
   initializeDatabase,
+  markDiamondOrderPaidAndCredit,
   recordMatch,
   recordPvpMatch,
+  unlockCharacterAtomic,
   type AuthenticatedUser,
   type PlayerStats,
   pool,
@@ -35,6 +44,11 @@ const TURN_SECS = 60
 const isProduction = process.env.NODE_ENV === 'production'
 const SESSION_COOKIE = isProduction ? '__Host-arena_session' : 'arena_session'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const razorpayKeyId = process.env.RAZORPAY_KEY_ID
+const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
+const razorpay = razorpayKeyId && razorpayKeySecret
+  ? new Razorpay({ key_id: razorpayKeyId, key_secret: razorpayKeySecret })
+  : null
 const railwayOrigin = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : ''
 const allowedOrigins = (process.env.APP_ORIGIN ?? `http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5174,${railwayOrigin}`)
   .split(',')
@@ -85,6 +99,7 @@ interface Room {
   activeSlot: 'p1' | 'p2'  // whose turn it is
   turnTimer: ReturnType<typeof setTimeout> | null
   resultRecorded: boolean
+  isLadder: boolean
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -165,7 +180,11 @@ async function executeTurn(io: Server, room: Room, queue: QueuedSkill[]) {
     if (!room.resultRecorded && room.p1 && room.p2) {
       room.resultRecorded = true
       const p1Won = room.state.phase === 'victory'
-      await recordPvpMatch(p1Won ? room.p1.userId : room.p2.userId, p1Won ? room.p2.userId : room.p1.userId)
+      const winnerId = p1Won ? room.p1.userId : room.p2.userId
+      const loserId  = p1Won ? room.p2.userId : room.p1.userId
+      await recordPvpMatch(winnerId, loserId)
+      // Only ranked ladder matches award coins — never trust the client's own reward math.
+      if (room.isLadder) await creditCoins(winnerId, COINS_PER_LADDER_WIN)
     }
     return
   }
@@ -262,6 +281,102 @@ app.post('/stats/match', async (req, res) => {
   res.json({ ok: true })
 })
 
+// ─── Diamond wallet & Razorpay payment endpoints ─────────────────────────────
+
+const paymentLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false })
+const economyLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false })
+
+app.get('/economy', async (req, res) => {
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+  res.json(await getEconomyState(user.id))
+})
+
+const unlockSchema = z.object({ characterId: z.string(), currency: z.enum(['coins', 'diamonds']) })
+
+app.post('/economy/unlock', economyLimiter, async (req, res) => {
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+
+  const parsed = unlockSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request.' }); return }
+  const { characterId, currency } = parsed.data
+
+  // Always resolve rarity/cost from the server-side catalog — never trust a client-supplied cost.
+  const rarity = CHARACTER_RARITY[characterId]
+  if (!rarity) { res.status(404).json({ error: 'Unknown wrestler.' }); return }
+  if (FREE_RARITIES.includes(rarity)) { res.status(400).json({ error: 'This wrestler is already free.' }); return }
+
+  const cost = UNLOCK_COST[rarity][currency]
+  if (cost == null) { res.status(400).json({ error: `${rarity} wrestlers cannot be unlocked with ${currency}.` }); return }
+
+  const result = await unlockCharacterAtomic(user.id, characterId, currency, cost)
+  if (result.status === 'insufficient_funds') { res.status(402).json({ error: 'Insufficient balance.' }); return }
+  res.json({ unlocked: true, coins: result.coins, diamonds: result.diamonds })
+})
+
+const createOrderSchema = z.object({ packageId: z.string() })
+
+app.post('/payments/create-order', paymentLimiter, async (req, res) => {
+  if (!razorpay) { res.status(503).json({ error: 'Payments are not configured.' }); return }
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+
+  const parsed = createOrderSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid package.' }); return }
+
+  // Always price from the server-side catalog — never trust a client-supplied amount.
+  const pkg = DIAMOND_PACKAGES.find(p => p.id === parsed.data.packageId)
+  if (!pkg) { res.status(400).json({ error: 'Unknown package.' }); return }
+
+  // Razorpay rejects orders under ₹1 (100 paise).
+  const amountPaise = Math.max(100, Math.round(pkg.priceInr * 100))
+
+  try {
+    const order = await razorpay.orders.create({
+      amount: amountPaise,
+      currency: 'INR',
+      notes: { userId: user.id, packageId: pkg.id },
+    })
+    await createDiamondOrder(order.id, user.id, pkg.id, pkg.diamonds + pkg.bonus, amountPaise)
+    res.json({ orderId: order.id, amount: amountPaise, currency: order.currency, keyId: razorpayKeyId })
+  } catch (error) {
+    console.error('Razorpay order creation failed', error)
+    res.status(502).json({ error: 'Could not create payment order.' })
+  }
+})
+
+const verifyPaymentSchema = z.object({
+  razorpay_order_id: z.string(),
+  razorpay_payment_id: z.string(),
+  razorpay_signature: z.string(),
+})
+
+app.post('/payments/verify', paymentLimiter, async (req, res) => {
+  if (!razorpay || !razorpayKeySecret) { res.status(503).json({ error: 'Payments are not configured.' }); return }
+  const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
+  if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
+
+  const parsed = verifyPaymentSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid payment payload.' }); return }
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = parsed.data
+
+  const order = await getDiamondOrder(razorpay_order_id)
+  if (!order || order.userId !== user.id) { res.status(404).json({ error: 'Order not found.' }); return }
+
+  const expectedSignature = createHmac('sha256', razorpayKeySecret)
+    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    .digest('hex')
+  const signaturesMatch = expectedSignature.length === razorpay_signature.length
+    && timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(razorpay_signature))
+  if (!signaturesMatch) { res.status(400).json({ error: 'Payment verification failed.' }); return }
+
+  const newBalance = await markDiamondOrderPaidAndCredit(razorpay_order_id, user.id)
+  if (newBalance === null) { res.status(409).json({ error: 'Order already processed.' }); return }
+  res.json({ diamonds: newBalance })
+})
+
+
 app.get('/leaderboards', async (_req, res) => {
   const eligible = await getLeaderboardStats()
   const byUsername = (a: PlayerStats, b: PlayerStats) => a.username.localeCompare(b.username)
@@ -331,7 +446,7 @@ io.on('connection', (socket: Socket) => {
         code,
         p1: { socketId: oppId, userId: socketToUser.get(oppId)!.id, slot: 'p1', team: null },
         p2: { socketId: socket.id, userId: socketToUser.get(socket.id)!.id, slot: 'p2', team: null },
-        state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false,
+        state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false, isLadder: true,
       }
       rooms.set(code, room)
       socketToRoom.set(oppId,     code)
@@ -358,7 +473,7 @@ io.on('connection', (socket: Socket) => {
     const room: Room = {
       code,
       p1: { socketId: socket.id, userId: socketToUser.get(socket.id)!.id, slot: 'p1', team: null },
-      p2: null, state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false,
+      p2: null, state: null, activeSlot: 'p1', turnTimer: null, resultRecorded: false, isLadder: false,
     }
     rooms.set(code, room)
     socketToRoom.set(socket.id, code)

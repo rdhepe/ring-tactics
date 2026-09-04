@@ -14,13 +14,18 @@ import { LoginPage } from './pages/LoginPage'
 import { MissionsPage } from './pages/Missions'
 import { LeaderboardsPage } from './pages/Leaderboards'
 import { LegalPage } from './pages/LegalPage'
+import { DiamondStorePage } from './pages/DiamondStore'
 import { useAuthStore } from './store/authStore'
+import { useRankStore } from './store/rankStore'
 import './pages/ArenaTheme.css'
 
 export default function App() {
   const initializeAuth = useAuthStore(state => state.initialize)
+  const isLoggedIn = useAuthStore(state => state.isLoggedIn)
+  const fetchEconomy = useRankStore(state => state.fetchEconomy)
 
   useEffect(() => { void initializeAuth() }, [initializeAuth])
+  useEffect(() => { if (isLoggedIn) void fetchEconomy() }, [isLoggedIn, fetchEconomy])
 
   return (
     <BrowserRouter>
@@ -38,6 +43,7 @@ export default function App() {
             <Route path="/battle" element={<RequireAuth><BattlePage /></RequireAuth>} />
             <Route path="/pvp"    element={<RequireAuth><PvpLobbyPage /></RequireAuth>} />
             <Route path="/ladder" element={<RequireAuth><LadderPage /></RequireAuth>} />
+            <Route path="/store" element={<DiamondStorePage />} />
             <Route path="/legal/:slug" element={<LegalPage />} />
           </Routes>
         </div>

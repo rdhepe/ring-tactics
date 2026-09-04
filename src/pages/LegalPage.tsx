@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
+import { DIAMOND_PACKAGES } from '../data/economy'
 
 interface LegalContent {
   title: string
@@ -26,7 +27,6 @@ const LEGAL_CONTENT: Record<string, LegalContent> = {
     body: [
       'Ring Tactics is free to play. Coins are earned in-game by winning ladder matches and cannot be purchased.',
       'Diamonds are a premium currency that can be purchased with real money to unlock cosmetic items and other premium features.',
-      'Diamond purchase packages and pricing will be published here once payment processing is live.',
     ],
   },
   terms: {
@@ -79,7 +79,37 @@ export function LegalPage() {
                 <p key={i} className="text-px-muted text-sm leading-relaxed mb-4 last:mb-0">{p}</p>
               ))
             : <p className="text-px-muted text-sm">This page could not be found.</p>}
-          <Link to="/" className="inline-block mt-4 text-px-gold text-xs uppercase tracking-widest hover:brightness-110"
+
+          {slug === 'pricing' && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #2e3755' }}>
+                    <th className="text-left py-2 px-2 text-px-dim uppercase tracking-widest text-xs" style={{ fontFamily: 'monospace' }}>Package</th>
+                    <th className="text-left py-2 px-2 text-px-dim uppercase tracking-widest text-xs" style={{ fontFamily: 'monospace' }}>Diamonds</th>
+                    <th className="text-left py-2 px-2 text-px-dim uppercase tracking-widest text-xs" style={{ fontFamily: 'monospace' }}>Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DIAMOND_PACKAGES.map(pkg => (
+                    <tr key={pkg.id} style={{ borderBottom: '1px solid #2e3755' }}>
+                      <td className="py-2 px-2 text-px-text font-bold">{pkg.name}</td>
+                      <td className="py-2 px-2 text-px-muted">
+                        {pkg.diamonds.toLocaleString()}{pkg.bonus > 0 ? ` + ${pkg.bonus.toLocaleString()} bonus` : ''}
+                      </td>
+                      <td className="py-2 px-2 text-px-gold font-bold">₹{pkg.priceInr.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Link to="/store" className="inline-block mt-4 px-5 py-2 text-xs font-bold uppercase tracking-widest hover:brightness-110"
+                    style={{ background: '#6be8ff22', color: '#6be8ff', border: '1px solid #6be8ff66', fontFamily: 'monospace' }}>
+                💎 Go to Diamond Store
+              </Link>
+            </div>
+          )}
+
+          <Link to="/" className="block mt-4 text-px-gold text-xs uppercase tracking-widest hover:brightness-110"
                 style={{ fontFamily: 'monospace' }}>
             &larr; Back to Home
           </Link>

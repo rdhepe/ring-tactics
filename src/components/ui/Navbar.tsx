@@ -43,11 +43,11 @@ export function Navbar() {
                              background: '#ffd16622', border: '1px solid #ffd16644', padding: '3px 10px' }}>
                 🪙 {coins}
               </span>
-              <span title="Diamonds — purchasable with real money (coming soon)"
+              <Link to="/store" title="Buy diamonds"
                     style={{ fontFamily: 'monospace', fontSize: 10, color: '#6be8ff',
                              background: '#6be8ff22', border: '1px solid #6be8ff44', padding: '3px 10px' }}>
                 💎 {diamonds}
-              </span>
+              </Link>
               <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#38d9a9',
                              background: '#38d9a922', border: '1px solid #38d9a944', padding: '3px 10px' }}>
                 {username}

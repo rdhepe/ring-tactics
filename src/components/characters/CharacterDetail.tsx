@@ -4,6 +4,8 @@ import { getRarityColor } from '../ui/RarityBadge'
 import { SkillCard } from '../ui/SkillCard'
 import { EnergyCostDisplay } from '../ui/EnergyOrb'
 import { HPBar } from '../ui/HPBar'
+import { UNLOCK_COST, FREE_RARITIES } from '../../data/economy'
+import { useRankStore } from '../../store/rankStore'
 
 interface CharacterDetailProps {
   character: Character
@@ -12,10 +14,83 @@ interface CharacterDetailProps {
   selectLabel?: string
 }
 
+function UnlockPanel({ character }: { character: Character }) {
+  const { coins, diamonds, unlockCharacter } = useRankStore()
+  const cost = UNLOCK_COST[character.rarity]
+  const [pending, setPending] = useState<'coins' | 'diamonds' | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function confirmUnlock(currency: 'coins' | 'diamonds') {
+    setBusy(true)
+    setError(null)
+    const success = await unlockCharacter(character.id, currency)
+    setBusy(false)
+    setPending(null)
+    if (!success) setError('Could not unlock — insufficient balance or a connection issue. Try again.')
+  }
+
+  if (pending) {
+    const amount = pending === 'coins' ? cost.coins! : cost.diamonds
+    const icon = pending === 'coins' ? '🪙' : '💎'
+    return (
+      <div className="px-4 py-5 flex flex-col items-center gap-3 text-center">
+        <p className="text-px-text text-sm">
+          Unlock <span className="font-bold">{character.name}</span> for <span className="font-bold">{amount} {icon}</span>?
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => confirmUnlock(pending)}
+            disabled={busy}
+            className="px-4 py-2 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+            style={{ background: '#38d9a922', color: '#38d9a9', border: '1px solid #38d9a966' }}>
+            {busy ? 'Confirming…' : 'Confirm'}
+          </button>
+          <button
+            onClick={() => setPending(null)}
+            disabled={busy}
+            className="px-4 py-2 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+            style={{ background: '#1d2235', color: '#8892b8', border: '1px solid #2e3755' }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-4 py-5 flex flex-col items-center gap-3 text-center">
+      <span style={{ fontSize: 32 }}>🔒</span>
+      <p className="text-px-muted text-sm">This wrestler is locked. Unlock permanently with coins or diamonds.</p>
+      {error && <p className="text-xs" style={{ color: '#f45e3f' }}>{error}</p>}
+      <div className="flex gap-2 flex-wrap justify-center">
+        {cost.coins != null && (
+          <button
+            onClick={() => setPending('coins')}
+            disabled={coins < cost.coins}
+            className="px-4 py-2 text-xs font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: '#ffd16622', color: '#ffd166', border: '1px solid #ffd16666' }}>
+            Unlock — {cost.coins} 🪙
+          </button>
+        )}
+        <button
+          onClick={() => setPending('diamonds')}
+          disabled={diamonds < cost.diamonds}
+          className="px-4 py-2 text-xs font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ background: '#6be8ff22', color: '#6be8ff', border: '1px solid #6be8ff66' }}>
+          Unlock — {cost.diamonds} 💎
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function CharacterDetail({ character, onSelect, selected, selectLabel = 'Add to Team' }: CharacterDetailProps) {
   const [activeIdx, setActiveIdx] = useState(0)
   const active = character.skills[activeIdx]
   const rc = getRarityColor(character.rarity)
+  const unlockedCharacters = useRankStore(s => s.unlockedCharacters)
+  const isLocked = !FREE_RARITIES.includes(character.rarity) && !unlockedCharacters.includes(character.id)
 
   return (
     <div className="arena-detail flex flex-col gap-0">
@@ -53,6 +128,8 @@ export function CharacterDetail({ character, onSelect, selected, selectLabel = '
       <div className="px-4 py-3" style={{ borderBottom: '1px solid #2e3755' }}>
         <p className="text-px-muted text-sm leading-relaxed">{character.description}</p>
       </div>
+
+      {isLocked && <UnlockPanel character={character} />}
 
       {/* skills */}
       <div>
@@ -119,7 +196,7 @@ export function CharacterDetail({ character, onSelect, selected, selectLabel = '
       </div>
 
       {/* select button */}
-      {onSelect && (
+      {onSelect && !isLocked && (
         <div className="px-4 pb-4 pt-1">
           <button
             onClick={onSelect}

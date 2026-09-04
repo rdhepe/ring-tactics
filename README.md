@@ -38,10 +38,20 @@ Set these environment variables in the hosting platform:
 - `VITE_API_URL`: public API origin used when building the frontend
 - `PORT`: API listener port, if required by the platform
 - `DATABASE_POOL_SIZE`: pool limit suitable for the database plan
+- `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`: from the Razorpay dashboard. Use `rzp_test_...` keys until payments are verified end-to-end, then switch to live keys. `RAZORPAY_KEY_SECRET` is read only on the server and must never be exposed to the frontend.
 
 Deploy the frontend and API under the same site (for example `game.example.com` and `api.example.com`) so strict cookies work predictably. Enable managed database backups, point-in-time recovery, TLS, monitoring, and credential rotation. Run at least two API instances behind a load balancer only after moving live room coordination from process memory to a shared service such as Redis.
 
 Health check: `GET /health`
+
+## Economy & Anti-Cheat
+
+Coins, diamonds, and wrestler unlocks are stored server-side in the `wallets` and `unlocked_characters` tables and are never trusted from the client:
+
+- Diamonds are only credited after a Razorpay payment signature is verified server-side (`/payments/verify`), and each order can be credited at most once.
+- Coins are only credited server-side when a ranked ladder match concludes (`isLadder` rooms), using the authoritative battle outcome computed by the server, not client-reported results.
+- Unlocking a wrestler (`/economy/unlock`) always re-derives the rarity and cost from the server-side catalog and atomically checks/deducts the balance in a transaction — a tampered client request can't unlock a wrestler for free or for less than its real cost.
+- The client's local currency display is a cache refreshed from `GET /economy`; editing browser storage does not grant currency or unlocks.
 
 ## Security Notes
 

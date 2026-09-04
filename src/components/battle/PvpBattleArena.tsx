@@ -63,6 +63,7 @@ export function PvpBattleArena({ onReset, isLadder = false }: { onReset: () => v
   const myUsername        = useAuthStore().username
   const recordMissionMatch = useMissionStore(s => s.recordMatch)
   const addMatch           = useRankStore(s => s.addMatch)
+  const fetchEconomy       = useRankStore(s => s.fetchEconomy)
 
   const [localQueue,   setLocalQueue]   = useState<QueuedSkill[]>([])
   const [selectedChar, setSelectedChar] = useState(0)
@@ -89,7 +90,11 @@ export function PvpBattleArena({ onReset, isLadder = false }: { onReset: () => v
       serverState.ai.characters.map(character => character.character.id),
     )
     // Only ladder matches count toward rank/XP and earn coins
-    if (isLadder) setReward(addMatch(result, serverState.turn, survivingAllies))
+    if (isLadder) {
+      setReward(addMatch(result, serverState.turn, survivingAllies))
+      // Coins are credited server-side on win; pull the authoritative balance instead of trusting local math.
+      void fetchEconomy()
+    }
   }, [serverState?.phase])
 
   // Reset award state when a new match starts

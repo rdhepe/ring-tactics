@@ -6,7 +6,7 @@ export default defineConfig(() => {
   const proxyTarget = process.env.DEV_PROXY_TARGET
   const proxy = proxyTarget
     ? Object.fromEntries(
-        ['/auth', '/stats', '/leaderboards', '/health', '/socket.io'].map(path => [
+        ['/auth', '/stats', '/leaderboards', '/health', '/wallet', '/payments', '/socket.io'].map(path => [
           path,
           {
             target: proxyTarget,
