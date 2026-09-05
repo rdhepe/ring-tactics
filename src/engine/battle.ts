@@ -170,12 +170,19 @@ function getDmgPenalty(char: BattleCharacter): number {
 }
 
 const OFFENSIVE_EFFECT_TYPES = new Set<SkillEffect['type']>(['damage', 'pierce_damage', 'affliction', 'conditional_damage', 'marked_bonus_damage'])
+const HIDDEN_EFFECT_TYPES = new Set<SkillEffect['type']>(['counter_guard', 'skill_cancel', 'interference'])
+const HIDDEN_FROM_PLAYER_LOG = '[hidden-from-player] '
+const HIDDEN_FROM_AI_LOG = '[hidden-from-ai] '
 
 function isOffensiveSkill(skill: Skill): boolean {
   return skill.effects.some(effect => OFFENSIVE_EFFECT_TYPES.has(effect.type))
 }
 
-function storeCopiedAttack(char: BattleCharacter, skill: Skill, turn: number, log: string[]): void {
+function pushHiddenLog(log: string[], hiddenFrom: TeamId, message: string): void {
+  log.push(`${hiddenFrom === 'player' ? HIDDEN_FROM_PLAYER_LOG : HIDDEN_FROM_AI_LOG}${message}`)
+}
+
+function storeCopiedAttack(char: BattleCharacter, skill: Skill, turn: number): void {
   if (!isOffensiveSkill(skill)) return
   char.copiedAttack = {
     skill: {
@@ -184,9 +191,18 @@ function storeCopiedAttack(char: BattleCharacter, skill: Skill, turn: number, lo
         ? { ...effect, value: Math.floor(effect.value * 0.8) }
         : { ...effect }),
     },
-    expiresAtTurn: turn + 2,
+    expiresAtTurn: turn + 3,
   }
-  log.push(`${char.character.name} copies ${skill.name} for 2 rounds.`)
+}
+
+function expireCopiedAttacks(state: BattleState, log: string[]): void {
+  for (const team of [state.player, state.ai]) for (const char of team.characters) {
+    if (char.copiedAttack && char.copiedAttack.expiresAtTurn < state.turn) {
+      delete char.copiedAttack
+      addActiveEffect(char, 'echo_s1', char.character.id, { type: 'skill_mark', value: 1, duration: 1, target: 'self' }, team.id)
+      log.push(`${char.character.name}'s Mirror Move was used.`)
+    }
+  }
 }
 
 function consumeFirstEffect(char: BattleCharacter, type: SkillEffect['type']): SkillEffect | undefined {
@@ -271,12 +287,12 @@ function applyDmg(
 // passive status effect types — listed here so addActiveEffect can reference them
 const PASSIVE_TYPES = new Set(['stun', 'invulnerable', 'damage_reduction', 'destructible_defense', 'damage_boost', 'damage_mark', 'counter_guard', 'damage_penalty', 'target_lock', 'attacked_target', 'setup_mode', 'skill_mark', 'precision_mode', 'chaos_mode', 'damaged_this_round', 'domino_mark', 'heal_on_damage', 'death_prevention', 'next_damage_boost', 'play_dead_mark', 'skill_cancel', 'interference'])
 
-function addActiveEffect(char: BattleCharacter, skillId: string, charId: string, effect: SkillEffect): void {
+function addActiveEffect(char: BattleCharacter, skillId: string, charId: string, effect: SkillEffect, sourceTeamId?: TeamId): void {
   const key = `${effect.type}_${skillId}` as ActiveEffect['key']
   char.activeEffects = char.activeEffects.filter(ae => ae.key !== key)
   // +1 so passive effects survive the end-of-turn tick and last the full declared duration
   const turnsLeft = PASSIVE_TYPES.has(effect.type) ? effect.duration + 1 : effect.duration
-  char.activeEffects.push({ key, sourceSkillId: skillId, sourceCharacterId: charId, effect: { ...effect }, turnsLeft, stacks: 1 })
+  char.activeEffects.push({ key, sourceSkillId: skillId, sourceCharacterId: charId, sourceTeamId, effect: { ...effect, hidden: effect.hidden ?? HIDDEN_EFFECT_TYPES.has(effect.type) }, turnsLeft, stacks: 1 })
 }
 
 function preventLethalDamage(char: BattleCharacter, log?: string[]): void {
@@ -522,9 +538,10 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
 
   if (actor.character.id === 'echo' && baseSkill.id === 'echo_s1') {
     if (state.lastOffensiveSkill && state.lastOffensiveSkill.teamId !== actorTeamId) {
-      storeCopiedAttack(actor, state.lastOffensiveSkill.skill, state.turn, log)
+      storeCopiedAttack(actor, state.lastOffensiveSkill.skill, state.turn)
+      pushHiddenLog(log, actorTeamId === 'player' ? 'ai' : 'player', `${actor.character.name} used Mirror Move.`)
     }
-    else log.push(`${actor.character.name} has no offensive attack to copy.`)
+    else pushHiddenLog(log, actorTeamId === 'player' ? 'ai' : 'player', `${actor.character.name} used Mirror Move, but no attack was available to copy.`)
   }
 
   const targetLock = actor.activeEffects.find(ae => ae.effect.type === 'target_lock')
@@ -555,7 +572,7 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
     const protectedEcho = enemyTeam.characters.find(char =>
       char.character.id === 'echo' && isInvulnerable(char) && char.perfectCopyTriggeredTurn !== state.turn)
     if (protectedEcho) {
-      storeCopiedAttack(protectedEcho, skill, state.turn, log)
+      storeCopiedAttack(protectedEcho, skill, state.turn)
       protectedEcho.perfectCopyTriggeredTurn = state.turn
     }
   }
@@ -567,7 +584,7 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
     if (primaryTarget.character.id === 'blackout' && isOffensiveSkill(skill)) grantFadeOutPenalty(actor, primaryTarget, log)
     if (primaryTarget.character.id === 'velvetvow' && isOffensiveSkill(skill)) markPlayDeadAttacker(actor, primaryTarget, log)
     if (primaryTarget.character.id === 'echo' && primaryTarget.perfectCopyTriggeredTurn !== state.turn && isOffensiveSkill(skill)) {
-      storeCopiedAttack(primaryTarget, skill, state.turn, log)
+      storeCopiedAttack(primaryTarget, skill, state.turn)
       primaryTarget.perfectCopyTriggeredTurn = state.turn
     }
     log.push(`${primaryTarget.character.name} is invulnerable! ${skill.name} fails.`)
@@ -602,7 +619,7 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
             : existing.effect.value + effect.value   // increment for next hit
           existing.turnsLeft = effect.duration + 1 // refresh decay window
         } else {
-          addActiveEffect(t, skill.id, actor.character.id, effect)
+          addActiveEffect(t, skill.id, actor.character.id, effect, actorTeamId)
           log.push(`${actor.character.name} locks onto ${t.character.name}!`)
         }
       }
@@ -629,13 +646,15 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
         if (isInstant) {
           applyInstant(finalEffect, skill.id, actor, actorTeam, t, tTeam, log)
         } else if (isPassive || isActionEffect) {
-          addActiveEffect(t, skill.id, actor.character.id, finalEffect)
+          addActiveEffect(t, skill.id, actor.character.id, finalEffect, actorTeamId)
           const verb: Record<string, string> = {
             stun: 'stuns', invulnerable: 'shields', damage_reduction: 'guards',
             destructible_defense: 'fortifies', damage_boost: 'empowers',
             affliction: 'poisons', damage: 'marks', heal: 'heals', energy_gain: 'charges',
           }
-          log.push(`${actor.character.name} ${verb[effect.type] ?? 'affects'} ${t.character.name} (${finalEffect.duration}t)`)
+          const message = `${actor.character.name} ${verb[effect.type] ?? 'affects'} ${t.character.name} (${finalEffect.duration}t)`
+          if (finalEffect.hidden ?? HIDDEN_EFFECT_TYPES.has(finalEffect.type)) pushHiddenLog(log, actorTeamId === 'player' ? 'ai' : 'player', message)
+          else log.push(message)
         }
       }
     }
@@ -920,6 +939,7 @@ export function resolveTurn(state: BattleState): BattleState {
     turnLog.push(result === 'victory' ? '🏆 Victory! All enemies defeated.' : '💀 Defeat. Your team fell.')
   } else {
     next.turn++
+    expireCopiedAttacks(next, turnLog)
     // reset stacking bonuses for skills not used within their decay window
     for (const team of [next.player, next.ai]) {
       for (const char of team.characters) {
@@ -984,6 +1004,7 @@ export function resolveTurnPvp(state: BattleState): BattleState {
     turnLog.push(result === 'victory' ? '🏆 Victory! All enemies defeated.' : '💀 Defeat. Your team fell.')
   } else {
     next.turn++
+    expireCopiedAttacks(next, turnLog)
     for (const team of [next.player, next.ai]) {
       for (const char of team.characters) {
         for (const skill of char.character.skills) {
@@ -1040,6 +1061,7 @@ export function resolveSinglePlayerTurn(
     turnLog.push(result === 'victory' ? '🏆 Victory! All enemies defeated.' : '💀 Defeat. Your team fell.')
   } else {
     next.turn++
+    expireCopiedAttacks(next, turnLog)
     for (const team of [next.player, next.ai]) {
       for (const char of team.characters) {
         for (const skill of char.character.skills) {

@@ -111,6 +111,10 @@ function lineStyle(line: string): { color: string; icon: string } {
   return { color: '#8892b8', icon: '▸' }
 }
 
+function cleanLogLine(line: string) {
+  return line.replace(/^\[hidden-from-(player|ai)\] /, '')
+}
+
 function SummaryModal({ turnNum, phase, lines, playerChars, aiChars, onClose }: {
   turnNum: number
   phase: 'player' | 'ai'
@@ -191,13 +195,14 @@ function SummaryModal({ turnNum, phase, lines, playerChars, aiChars, onClose }: 
           {lines.length === 0 ? (
             <p style={{ color: '#4a5578', fontSize: 12, textAlign: 'center', padding: '16px' }}>No actions this turn.</p>
           ) : lines.map((line, i) => {
-            const isSection = line.startsWith('─')
-            const { color, icon } = lineStyle(line)
-            const portrait = !isSection ? findPortrait(line) : null
+            const cleanLine = cleanLogLine(line)
+            const isSection = cleanLine.startsWith('─')
+            const { color, icon } = lineStyle(cleanLine)
+            const portrait = !isSection ? findPortrait(cleanLine) : null
             if (isSection) return (
               <div key={i} style={{ padding: '6px 14px 3px', marginTop: 4 }}>
                 <p style={{ fontSize: 8, color: '#4a5578', fontFamily: 'monospace',
-                             textTransform: 'uppercase', letterSpacing: 2 }}>{line.replace(/─/g, '').trim()}</p>
+                             textTransform: 'uppercase', letterSpacing: 2 }}>{cleanLine.replace(/─/g, '').trim()}</p>
               </div>
             )
             return (
@@ -216,7 +221,7 @@ function SummaryModal({ turnNum, phase, lines, playerChars, aiChars, onClose }: 
                 ) : (
                   <span style={{ fontSize: 14, flexShrink: 0, width: 26, textAlign: 'center' }}>{icon}</span>
                 )}
-                <span style={{ fontSize: 11, color, lineHeight: 1.5 }}>{line}</span>
+                <span style={{ fontSize: 11, color, lineHeight: 1.5 }}>{cleanLine}</span>
               </div>
             )
           })}

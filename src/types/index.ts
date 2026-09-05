@@ -77,6 +77,8 @@ export interface SkillEffect {
   consumeMark?: boolean
   /** bonus added when conditional_heal_below_half targets an ally below 50% HP */
   lowHealthBonus?: number
+  /** Hidden from the opposing PvP client until it resolves or expires. */
+  hidden?: boolean
 }
 
 export interface SkillVariant {
@@ -171,6 +173,7 @@ export interface ActiveEffect {
   key: StatusKey
   sourceSkillId: string
   sourceCharacterId: string
+  sourceTeamId?: TeamId
   effect: SkillEffect
   turnsLeft: number
   stacks: number

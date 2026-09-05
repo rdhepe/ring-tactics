@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react'
 
 interface TurnLogProps { log: string[]; maxHeight?: string | number }
 
+function cleanLogLine(line: string) {
+  return line.replace(/^\[hidden-from-(player|ai)\] /, '')
+}
+
 export function TurnLog({ log, maxHeight = 'min(28vh, 220px)' }: TurnLogProps) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => { ref.current?.scrollTo(0, ref.current.scrollHeight) }, [log])
@@ -14,8 +18,9 @@ export function TurnLog({ log, maxHeight = 'min(28vh, 220px)' }: TurnLogProps) {
       </div>
       <div ref={ref} className="overflow-y-auto px-3 py-2 flex flex-col gap-0.5" style={{ maxHeight, background: '#0c0e1a' }}>
         {log.map((line, i) => {
-          const isSep = line.startsWith('───')
-          const isResult = line.startsWith('🏆') || line.startsWith('💀')
+          const cleanLine = cleanLogLine(line)
+          const isSep = cleanLine.startsWith('───')
+          const isResult = cleanLine.startsWith('🏆') || cleanLine.startsWith('💀')
           return (
             <p key={i}
                className="text-xs leading-relaxed"
@@ -24,7 +29,7 @@ export function TurnLog({ log, maxHeight = 'min(28vh, 220px)' }: TurnLogProps) {
                  fontFamily: isSep ? 'monospace' : 'inherit',
                  fontSize: isSep ? 9 : 12,
                }}>
-              {line}
+              {cleanLine}
             </p>
           )
         })}

@@ -351,10 +351,39 @@ function unflipQueue(queue: QueuedSkill[]): QueuedSkill[] {
   }))
 }
 
+const HIDDEN_FROM_PLAYER_LOG = '[hidden-from-player] '
+const HIDDEN_FROM_AI_LOG = '[hidden-from-ai] '
+
+function filterLogForViewer(log: string[], viewerTeam: TeamId): string[] {
+  const ownPrefix = viewerTeam === 'player' ? HIDDEN_FROM_AI_LOG : HIDDEN_FROM_PLAYER_LOG
+  const blockedPrefix = viewerTeam === 'player' ? HIDDEN_FROM_PLAYER_LOG : HIDDEN_FROM_AI_LOG
+  return log.flatMap(line => {
+    if (line.startsWith(blockedPrefix)) return []
+    if (line.startsWith(ownPrefix)) return [line.slice(ownPrefix.length)]
+    return [line]
+  })
+}
+
+function sanitizeStateForViewer(state: BattleState, viewerTeam: TeamId): BattleState {
+  const next = structuredClone(state) as BattleState
+  const ownCharacterIds = new Set(next.player.characters.map(char => char.character.id))
+  for (const team of [next.player, next.ai]) {
+    for (const char of team.characters) {
+      if (team.id === 'ai') delete char.copiedAttack
+      char.activeEffects = char.activeEffects.filter(effect =>
+        !effect.effect.hidden
+        || effect.sourceTeamId === viewerTeam
+        || (!effect.sourceTeamId && ownCharacterIds.has(effect.sourceCharacterId)))
+    }
+  }
+  next.log = filterLogForViewer(next.log, viewerTeam)
+  return next
+}
+
 function emit(io: Server, room: Room) {
   if (!room.state) return
-  if (room.p1) io.to(room.p1.socketId).emit('state_update', { state: room.state })
-  if (room.p2) io.to(room.p2.socketId).emit('state_update', { state: flipForP2(room.state) })
+  if (room.p1) io.to(room.p1.socketId).emit('state_update', { state: sanitizeStateForViewer(room.state, 'player') })
+  if (room.p2) io.to(room.p2.socketId).emit('state_update', { state: sanitizeStateForViewer(flipForP2(room.state), 'ai') })
 }
 
 function clearTimer(room: Room) {
