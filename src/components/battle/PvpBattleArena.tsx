@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, memo } from 'react'
+import { useEffect, useRef, useState, memo, useCallback } from 'react'
 import { usePvpStore } from '../../store/pvpStore'
 import { useAuthStore } from '../../store/authStore'
 import { useMissionStore } from '../../store/missionStore'
@@ -27,13 +27,20 @@ function extractLastTurnLog(log: string[]): { playerLines: string[]; aiLines: st
 }
 
 // Isolated so its per-second setState doesn't re-render the full arena
-const TurnTimer = memo(function TurnTimer({ initialTime }: { initialTime: number }) {
+const TurnTimer = memo(function TurnTimer({ initialTime, onExpire }: { initialTime: number; onExpire: () => void }) {
   const [t, setT] = useState(initialTime)
+  const expiredRef = useRef(false)
   useEffect(() => {
     setT(initialTime)
+    expiredRef.current = false
     const id = setInterval(() => setT(p => Math.max(0, p - 1)), 1000)
     return () => clearInterval(id)
   }, [initialTime])
+  useEffect(() => {
+    if (t !== 0 || expiredRef.current) return
+    expiredRef.current = true
+    onExpire()
+  }, [t, onExpire])
   const pct = (t / TURN_SECS) * 100
   const col  = t > 30 ? '#ffd166' : t > 15 ? '#f4a83f' : '#f45e3f'
   return (
@@ -75,6 +82,21 @@ export function PvpBattleArena({ onReset, isLadder = false }: { onReset: () => v
   const [reward, setReward]             = useState<{ xp: number; coins: number } | null>(null)
   const lastTurnRef = useRef(0)
   const missionRecordedRef = useRef(false)
+  const localQueueRef = useRef(localQueue)
+  const autoSubmittedTurnRef = useRef(0)
+
+  useEffect(() => { localQueueRef.current = localQueue }, [localQueue])
+
+  const submitCurrentQueue = useCallback(() => {
+    if (!serverState || !myTurn || serverState.phase === 'victory' || serverState.phase === 'defeat') return
+    submitQueue(localQueueRef.current)
+  }, [serverState?.turn, serverState?.phase, myTurn, submitQueue])
+
+  const autoSubmitCurrentQueue = useCallback(() => {
+    if (!serverState || autoSubmittedTurnRef.current === serverState.turn) return
+    autoSubmittedTurnRef.current = serverState.turn
+    submitCurrentQueue()
+  }, [serverState?.turn, submitCurrentQueue])
 
   useEffect(() => {
     if (!serverState || !myUsername || missionRecordedRef.current) return
@@ -302,14 +324,14 @@ export function PvpBattleArena({ onReset, isLadder = false }: { onReset: () => v
                 YOUR TURN
               </p>
               <button
-                onClick={() => submitQueue(localQueue)}
+                onClick={submitCurrentQueue}
                 style={{ padding: '6px 20px', fontFamily: "'Press Start 2P', monospace", fontSize: 8,
                          background: '#c42b2b', color: '#fff', boxShadow: '3px 3px 0 #7a1a0a',
                          border: 'none', cursor: 'pointer' }}>
                 ▶ READY
               </button>
               {/* TurnTimer is isolated — its 1-second setState never re-renders the arena */}
-              <TurnTimer initialTime={serverTime} />
+              <TurnTimer initialTime={serverTime} onExpire={autoSubmitCurrentQueue} />
             </>
           ) : (
             <p style={{ fontFamily: 'monospace', fontSize: 9, color: '#4a5578' }}>Starting...</p>

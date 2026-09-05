@@ -3,6 +3,8 @@ import { io, type Socket } from 'socket.io-client'
 import type { BattleState, Character, QueuedSkill } from '../types'
 import { CHARACTER_MAP } from '../data/characters'
 
+type QueueAck = { ok: boolean; error?: string }
+
 // Bot opponents are built server-side from an image-free character mirror (server can't
 // import .jpg assets), so their avatar/skill icons arrive blank over the wire. Fill them
 // in from the real bundled character data (matched by id) before rendering.
@@ -93,6 +95,14 @@ export const usePvpStore = create<PvpStore>((set, get) => ({
         ? 'Ring Tactics is not live yet. Check back soon!'
         : 'Cannot reach PvP server. Run: npm run server' }))
 
+    socket.on('disconnect', reason => {
+      if (reason === 'io client disconnect') return
+      const phase = get().pvpPhase
+      if (phase === 'searching' || phase === 'team_select' || phase === 'battle') {
+        set({ pvpPhase: 'error', errorMsg: 'Connection lost. The match can no longer continue.' })
+      }
+    })
+
     socket.on('room_created',  ({ code, slot }: { code: string; slot: 'p1'|'p2' }) =>
       set({ roomCode: code, mySlot: slot, pvpPhase: 'waiting_for_opponent' }))
 
@@ -142,7 +152,19 @@ export const usePvpStore = create<PvpStore>((set, get) => ({
 
   cancelSearch: () => { get().socket?.emit('cancel_search'); set({ pvpPhase: 'idle' }) },
   submitTeam:  (team) => get().socket?.emit('submit_team', { team }),
-  submitQueue: (queue) => get().socket?.emit('submit_queue', { queue }),
+  submitQueue: (queue) => {
+    const socket = get().socket
+    if (!socket?.connected) {
+      set({ pvpPhase: 'error', errorMsg: 'Connection lost. The match can no longer continue.' })
+      return
+    }
+    socket.timeout(5000).emit('submit_queue', { queue }, (err: Error | null, response?: QueueAck) => {
+      if (err) { set({ pvpPhase: 'error', errorMsg: 'Ready failed because the PvP server did not respond. Please start a new match.' }); return }
+      if (response && !response.ok && response.error !== 'not_your_turn' && response.error !== 'turn_unavailable') {
+        set({ pvpPhase: 'error', errorMsg: 'Ready failed. Please start a new match.' })
+      }
+    })
+  },
   switchMode:  (charIdx) => get().socket?.emit('switch_mode', { charIdx }),
 
   reset: () => {

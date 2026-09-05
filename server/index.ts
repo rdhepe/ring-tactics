@@ -961,15 +961,16 @@ io.on('connection', (socket: Socket) => {
     }
   })
 
-  socket.on('submit_queue', ({ queue }: { queue: QueuedSkill[] }) => {
+  socket.on('submit_queue', ({ queue }: { queue: QueuedSkill[] }, ack?: (response: { ok: boolean; error?: string }) => void) => {
     const code = socketToRoom.get(socket.id)
     const room = code ? rooms.get(code) : null
-    if (!room?.state || room.state.phase !== 'player_turn') return
+    if (!room?.state || room.state.phase !== 'player_turn') { ack?.({ ok: false, error: 'turn_unavailable' }); return }
 
     const active = room.activeSlot === 'p1' ? room.p1 : room.p2
-    if (!active || active.socketId !== socket.id) return
+    if (!active || active.socketId !== socket.id) { ack?.({ ok: false, error: 'not_your_turn' }); return }
 
     void executeTurn(io, room, queue)
+    ack?.({ ok: true })
   })
 
   socket.on('switch_mode', ({ charIdx }: { charIdx: number }) => {
