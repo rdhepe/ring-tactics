@@ -1,5 +1,3 @@
-import { Link } from 'react-router-dom'
-
 interface Step {
   n: string
   title: string
@@ -127,13 +125,6 @@ export function TutorialPage() {
           </div>
         ))}
 
-        <div className="flex flex-col items-center gap-3 mt-4">
-          <Link to="/pre-register"
-                className="px-6 py-3 font-bold text-xs uppercase tracking-widest hover:brightness-110"
-                style={{ background: '#c42b2b', color: '#fff', boxShadow: '3px 3px 0 #7a1a0a', fontFamily: 'monospace' }}>
-            ▶ Pre-Register Now
-          </Link>
-        </div>
       </div>
     </div>
   )
