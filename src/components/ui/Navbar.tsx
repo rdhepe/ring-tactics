@@ -11,6 +11,7 @@ export function Navbar() {
     { to: '/characters', label: 'Roster',    public: true  },
     { to: '/missions',   label: 'Missions',  public: true  },
     { to: '/leaderboards', label: 'Leaders', public: true  },
+    { to: '/tutorial',   label: 'Tutorial',  public: true  },
     { to: '/battle',     label: 'Match',     public: false },
     { to: '/ranking',    label: 'Rank',      public: false },
   ] as const
@@ -43,11 +44,11 @@ export function Navbar() {
                              background: '#ffd16622', border: '1px solid #ffd16644', padding: '3px 10px' }}>
                 🪙 {coins}
               </span>
-              <Link to="/store" title="Buy diamonds"
-                    style={{ fontFamily: 'monospace', fontSize: 10, color: '#6be8ff',
-                             background: '#6be8ff22', border: '1px solid #6be8ff44', padding: '3px 10px' }}>
+                <span title="Diamonds"
+                  style={{ fontFamily: 'monospace', fontSize: 10, color: '#6be8ff',
+                       background: '#6be8ff22', border: '1px solid #6be8ff44', padding: '3px 10px' }}>
                 💎 {diamonds}
-              </Link>
+                </span>
               <Link to="/profile" title="My Profile"
                     style={{ fontFamily: 'monospace', fontSize: 10, color: '#38d9a9',
                              background: '#38d9a922', border: '1px solid #38d9a944', padding: '3px 10px' }}>

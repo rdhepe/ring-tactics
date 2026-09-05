@@ -787,8 +787,10 @@ app.post('/economy/unlock', economyLimiter, async (req, res) => {
 })
 
 const createOrderSchema = z.object({ packageId: z.string() })
+const PAYMENTS_ENABLED = false
 
 app.post('/payments/create-order', paymentLimiter, async (req, res) => {
+  if (!PAYMENTS_ENABLED) { res.status(503).json({ error: 'Diamond Store coming soon.' }); return }
   if (!razorpay) { res.status(503).json({ error: 'Payments are not configured.' }); return }
   const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
   if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
@@ -824,6 +826,7 @@ const verifyPaymentSchema = z.object({
 })
 
 app.post('/payments/verify', paymentLimiter, async (req, res) => {
+  if (!PAYMENTS_ENABLED) { res.status(503).json({ error: 'Diamond Store coming soon.' }); return }
   if (!razorpay || !razorpayKeySecret) { res.status(503).json({ error: 'Payments are not configured.' }); return }
   const user = await getUserBySession(req.cookies[SESSION_COOKIE] ?? '')
   if (!user) { res.status(401).json({ error: 'Not authenticated.' }); return }
