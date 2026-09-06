@@ -177,6 +177,7 @@ export interface ActiveEffect {
   effect: SkillEffect
   turnsLeft: number
   stacks: number
+  lastTriggeredTurn?: number
 }
 
 export interface BattleCharacter {

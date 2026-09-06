@@ -291,7 +291,9 @@ function addActiveEffect(char: BattleCharacter, skillId: string, charId: string,
   const key = `${effect.type}_${skillId}` as ActiveEffect['key']
   char.activeEffects = char.activeEffects.filter(ae => ae.key !== key)
   // +1 so passive effects survive the end-of-turn tick and last the full declared duration
-  const turnsLeft = PASSIVE_TYPES.has(effect.type) ? effect.duration + 1 : effect.duration
+  const turnsLeft = effect.type === 'interference'
+    ? effect.duration + 2
+    : PASSIVE_TYPES.has(effect.type) ? effect.duration + 1 : effect.duration
   char.activeEffects.push({ key, sourceSkillId: skillId, sourceCharacterId: charId, sourceTeamId, effect: { ...effect, hidden: effect.hidden ?? HIDDEN_EFFECT_TYPES.has(effect.type) }, turnsLeft, stacks: 1 })
 }
 
@@ -320,6 +322,7 @@ function handleSuccessfulDamage(
   actor: BattleCharacter,
   target: BattleCharacter,
   amount: number,
+  turn: number,
   log: string[],
 ): void {
   if (amount <= 0) return
@@ -349,9 +352,10 @@ function handleSuccessfulDamage(
     log.push(`${actor.character.name} keeps it going and heals ${actor.hp - before} HP.`)
   }
 
-  const interferenceIndex = actor.activeEffects.findIndex(effect => effect.effect.type === 'interference')
-  if (interferenceIndex !== -1) {
-    const [interference] = actor.activeEffects.splice(interferenceIndex, 1)
+  const interference = actor.activeEffects.find(effect =>
+    effect.effect.type === 'interference' && effect.lastTriggeredTurn !== turn)
+  if (interference) {
+    interference.lastTriggeredTurn = turn
     const retaliation = applyDmg(actor, interference.effect.value, 'normal')
     log.push(`Blackout interferes and deals ${retaliation} damage to ${actor.character.name}.`)
   }
@@ -368,6 +372,7 @@ function applyInstant(
   skillId: string,
   actor: BattleCharacter, actorTeam: BattleTeam,
   target: BattleCharacter, targetTeam: BattleTeam,
+  turn: number,
   log: string[],
 ): void {
   const boost = getDmgBoost(actor)
@@ -378,7 +383,7 @@ function applyInstant(
     case 'damage': {
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
       const dealt = applyDmg(target, amount, 'normal', actor, log)
-      handleSuccessfulDamage(actor, target, dealt, log)
+      handleSuccessfulDamage(actor, target, dealt, turn, log)
       consumeFirstEffect(actor, 'damage_penalty')
       if (dealt > 0) consumeFirstEffect(actor, 'next_damage_boost')
       rememberAttack(actor, target)
@@ -388,7 +393,7 @@ function applyInstant(
     case 'pierce_damage': {
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
       const dealt = applyDmg(target, amount, 'pierce', actor, log)
-      handleSuccessfulDamage(actor, target, dealt, log)
+      handleSuccessfulDamage(actor, target, dealt, turn, log)
       consumeFirstEffect(actor, 'damage_penalty')
       if (dealt > 0) consumeFirstEffect(actor, 'next_damage_boost')
       rememberAttack(actor, target)
@@ -398,7 +403,7 @@ function applyInstant(
     case 'affliction': {
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
       const dealt = applyDmg(target, amount, 'affliction', actor, log)
-      handleSuccessfulDamage(actor, target, dealt, log)
+      handleSuccessfulDamage(actor, target, dealt, turn, log)
       consumeFirstEffect(actor, 'damage_penalty')
       if (dealt > 0) consumeFirstEffect(actor, 'next_damage_boost')
       rememberAttack(actor, target)
@@ -417,7 +422,7 @@ function applyInstant(
       if (!target.activeEffects.some(active => active.effect.type === 'damaged_this_round')) break
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
       const dealt = applyDmg(target, amount, 'normal', actor, log)
-      handleSuccessfulDamage(actor, target, dealt, log)
+      handleSuccessfulDamage(actor, target, dealt, turn, log)
       consumeFirstEffect(actor, 'damage_penalty')
       log.push(`${aName} follows up on ${tName} for ${amount} bonus damage`)
       break
@@ -426,7 +431,7 @@ function applyInstant(
       if (!Object.values(target.skillLastUsedTurn).some(turn => turn === actor.skillLastUsedTurn[skillId])) break
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
       const dealt = applyDmg(target, amount, 'normal', actor, log)
-      handleSuccessfulDamage(actor, target, dealt, log)
+      handleSuccessfulDamage(actor, target, dealt, turn, log)
       consumeFirstEffect(actor, 'damage_penalty')
       log.push(`${aName} catches ${tName} off rhythm for ${amount} bonus damage`)
       break
@@ -644,7 +649,7 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
         const isActionEffect = skill.persistence !== 'instant'
 
         if (isInstant) {
-          applyInstant(finalEffect, skill.id, actor, actorTeam, t, tTeam, log)
+          applyInstant(finalEffect, skill.id, actor, actorTeam, t, tTeam, state.turn, log)
         } else if (isPassive || isActionEffect) {
           addActiveEffect(t, skill.id, actor.character.id, finalEffect, actorTeamId)
           const verb: Record<string, string> = {
