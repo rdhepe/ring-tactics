@@ -213,6 +213,12 @@ function consumeFirstEffect(char: BattleCharacter, type: SkillEffect['type']): S
   return effect.effect
 }
 
+function revealHiddenEffect(char: BattleCharacter, effect: ActiveEffect, log: string[]): void {
+  if (!effect.effect.hidden) return
+  addActiveEffect(char, effect.sourceSkillId, effect.sourceCharacterId, { type: 'skill_mark', value: 1, duration: 1, target: 'self' }, effect.sourceTeamId)
+  log.push(`${char.character.name}'s ${effect.sourceSkillId === 'echo_s3' ? 'Read the Room' : effect.sourceSkillId === 'ironmaiden_s2' ? 'Reversal' : effect.sourceSkillId === 'blackout_s2' ? 'Cut the Lights' : 'Interference'} was used.`)
+}
+
 function rememberAttack(attacker: BattleCharacter, target: BattleCharacter): void {
   const key = `attacked_target_${target.character.id}` as ActiveEffect['key']
   attacker.activeEffects = attacker.activeEffects.filter(ae => ae.key !== key)
@@ -251,16 +257,18 @@ function applyDmg(
   let dmg = raw + markBonus
   if (markBonus > 0) log?.push(`${char.character.name}'s Play Dead mark adds ${markBonus} damage.`)
   if (attacker) {
-    const counterGuard = consumeFirstEffect(char, 'counter_guard')
-    if (counterGuard) {
-      const reduced = Math.min(counterGuard.value, dmg)
+    const counterGuardIndex = char.activeEffects.findIndex(effect => effect.effect.type === 'counter_guard')
+    if (counterGuardIndex !== -1) {
+      const [counterGuard] = char.activeEffects.splice(counterGuardIndex, 1)
+      const reduced = Math.min(counterGuard.effect.value, dmg)
       dmg -= reduced
       log?.push(`${char.character.name}'s reversal reduces incoming damage by ${reduced}`)
-      const counterDamage = counterGuard.counterDamage ?? 0
+      const counterDamage = counterGuard.effect.counterDamage ?? 0
       if (counterDamage > 0 && !attacker.isDead) {
         applyDmg(attacker, counterDamage, 'normal')
         log?.push(`${char.character.name} reverses ${attacker.character.name} for ${counterDamage} damage`)
       }
+      if (log) revealHiddenEffect(char, counterGuard, log)
     }
   }
   if (dtype === 'affliction') {
@@ -534,8 +542,11 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
   const skill = getEffectiveSkill(actor, baseSkill)
 
   if (isStunned(actor)) { log.push(`${actor.character.name} is stunned!`); return }
-  if (consumeFirstEffect(actor, 'skill_cancel')) {
+  const skillCancelIndex = actor.activeEffects.findIndex(effect => effect.effect.type === 'skill_cancel')
+  if (skillCancelIndex !== -1) {
+    const [skillCancel] = actor.activeEffects.splice(skillCancelIndex, 1)
     log.push(`${actor.character.name}'s ${skill.name} is cancelled!`)
+    revealHiddenEffect(actor, skillCancel, log)
     return
   }
   if ((actor.cooldowns[skill.id] ?? 0) > 0) { log.push(`${actor.character.name}'s ${skill.name} is on cooldown!`); return }
@@ -700,7 +711,9 @@ export function tickCharEffects(
     }
     ae.turnsLeft--
   }
+  const expired = char.activeEffects.filter(ae => ae.turnsLeft <= 0)
   char.activeEffects = char.activeEffects.filter(ae => ae.turnsLeft > 0)
+  for (const effect of expired) revealHiddenEffect(char, effect, log)
 }
 
 function tickCooldowns(char: BattleCharacter): void {
