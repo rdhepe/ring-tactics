@@ -255,7 +255,7 @@ export const BOT_CHARACTER_POOL: Character[] = [
       {
         id: 'ironmaiden_s3',
         name: 'Lockdown',
-        description: "Traps the opponent in a technical hold. Target's next attack deals 15 less damage and they cannot change their queued target.",
+        description: "Traps the opponent in a technical hold. The target takes 15 less damage and cannot change their queued target for their next turn.",
         iconColor: 'bg-stone-700',
         iconUrl: '',
         cost: { strength: 1, random: 1 },
@@ -264,7 +264,7 @@ export const BOT_CHARACTER_POOL: Character[] = [
         mainClass: 'physical',
         persistence: 'action',
         effects: [
-          { type: 'damage_penalty', value: 15, duration: 1 },
+          { type: 'damage_reduction', value: 15, duration: 2 },
           { type: 'target_lock', value: 1, duration: 1 },
         ],
       },

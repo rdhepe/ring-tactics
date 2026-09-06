@@ -374,6 +374,7 @@ function applyInstant(
   target: BattleCharacter, targetTeam: BattleTeam,
   turn: number,
   log: string[],
+  allowConditionalDamage?: boolean,
 ): void {
   const boost = getDmgBoost(actor)
   const outgoingPenalty = getDmgPenalty(actor)
@@ -411,7 +412,7 @@ function applyInstant(
       break
     }
     case 'conditional_damage': {
-      if (!hasEffectFromSource(target, 'attacked_target', actor.character.id)) break
+      if (allowConditionalDamage === false || !hasEffectFromSource(target, 'attacked_target', actor.character.id)) break
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
       applyDmg(target, amount, 'normal', actor, log)
       consumeFirstEffect(actor, 'damage_penalty')
@@ -428,7 +429,7 @@ function applyInstant(
       break
     }
     case 'conditional_used_skill_this_round': {
-      if (!Object.values(target.skillLastUsedTurn).some(turn => turn === actor.skillLastUsedTurn[skillId])) break
+      if (!Object.values(target.skillLastUsedTurn).some(lastUsedTurn => lastUsedTurn === turn - 1)) break
       const amount = Math.max(0, effect.value + boost - outgoingPenalty)
       const dealt = applyDmg(target, amount, 'normal', actor, log)
       handleSuccessfulDamage(actor, target, dealt, turn, log)
@@ -563,6 +564,9 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
   const isEnemyTarget = targetTeamId !== actorTeamId
   const targetTeam = targetTeamId === 'player' ? state.player : state.ai
   const primaryTarget = targetTeam.characters[targetIndex]
+  const counterPunchEligible = baseSkill.id === 'ironmaiden_s1'
+    && !!primaryTarget
+    && hasEffectFromSource(primaryTarget, 'attacked_target', actor.character.id)
 
   if (skill.targetType === 'all_enemies' && isOffensiveSkill(skill)) {
     const protectedBreakpoint = enemyTeam.characters.find(char =>
@@ -649,7 +653,7 @@ export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, acto
         const isActionEffect = skill.persistence !== 'instant'
 
         if (isInstant) {
-          applyInstant(finalEffect, skill.id, actor, actorTeam, t, tTeam, state.turn, log)
+          applyInstant(finalEffect, skill.id, actor, actorTeam, t, tTeam, state.turn, log, baseSkill.id === 'ironmaiden_s1' ? counterPunchEligible : undefined)
         } else if (isPassive || isActionEffect) {
           addActiveEffect(t, skill.id, actor.character.id, finalEffect, actorTeamId)
           const verb: Record<string, string> = {
