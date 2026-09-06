@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBattleStore } from '../../store/battleStore'
-import { API, useAuthStore } from '../../store/authStore'
+import { useAuthStore } from '../../store/authStore'
 import { useMissionStore } from '../../store/missionStore'
 import { CharacterRow } from './CharacterRow'
 import type { IncomingQueued } from './CharacterRow'
@@ -285,15 +285,6 @@ export function BattleArena() {
     xpAwardedRef.current = true
     const result = state.phase === 'victory' ? 'win' : 'loss'
     const survivingAllies = state.player.characters.filter(c => !c.isDead).length
-    // AI matches don't count toward rank/XP — only ladder matches do
-    if (username) void fetch(`${API}/stats/match`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ result }),
-    })
     if (username) recordMissionMatch(
       username,
       result,
