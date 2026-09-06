@@ -13,10 +13,11 @@ const LOG_MAX = 80
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 function makeBattleChar(character: Character): BattleCharacter {
-  const activeEffects: ActiveEffect[] = character.skills.some(skill => skill.modeToggle)
+  const modeToggle = character.skills.find(skill => skill.modeToggle)
+  const activeEffects: ActiveEffect[] = modeToggle
     ? [{
         key: 'precision_mode_default',
-        sourceSkillId: 'mode_toggle',
+        sourceSkillId: modeToggle.id,
         sourceCharacterId: character.id,
         effect: { type: 'precision_mode', value: 1, duration: 9999 },
         turnsLeft: 9999,
@@ -290,10 +291,8 @@ const PASSIVE_TYPES = new Set(['stun', 'invulnerable', 'damage_reduction', 'dest
 function addActiveEffect(char: BattleCharacter, skillId: string, charId: string, effect: SkillEffect, sourceTeamId?: TeamId): void {
   const key = `${effect.type}_${skillId}` as ActiveEffect['key']
   char.activeEffects = char.activeEffects.filter(ae => ae.key !== key)
-  // +1 so passive effects survive the end-of-turn tick and last the full declared duration
-  const turnsLeft = effect.type === 'interference'
-    ? effect.duration + 2
-    : PASSIVE_TYPES.has(effect.type) ? effect.duration + 1 : effect.duration
+  // +2 means the casting action does not consume one of the declared duration turns.
+  const turnsLeft = PASSIVE_TYPES.has(effect.type) ? effect.duration + 2 : effect.duration
   char.activeEffects.push({ key, sourceSkillId: skillId, sourceCharacterId: charId, sourceTeamId, effect: { ...effect, hidden: effect.hidden ?? HIDDEN_EFFECT_TYPES.has(effect.type) }, turnsLeft, stacks: 1 })
 }
 
