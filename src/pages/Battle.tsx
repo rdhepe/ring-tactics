@@ -11,7 +11,7 @@ type GameMode = 'vs_ai' | 'vs_player' | 'ladder'
 const MODES: { id: GameMode; label: string; sub: string; available: boolean }[] = [
   { id: 'vs_ai',     label: 'VS AI',     sub: 'Fight a computer opponent',        available: true },
   { id: 'vs_player', label: 'VS Player', sub: 'Private room — play with a friend', available: true },
-  { id: 'ladder',    label: 'Ladder',    sub: 'Auto-match with a random opponent', available: true },
+  { id: 'ladder',    label: 'Ranked Match', sub: 'Auto-match with a random opponent', available: true },
 ]
 
 function MatchMenu({ onSelect }: { onSelect: (mode: GameMode) => void }) {

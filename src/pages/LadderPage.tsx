@@ -30,7 +30,7 @@ function SearchingScreen({ status, onCancel, isSearching }: { status: string; on
     <div className="arena-page arena-stage arena-center-state min-h-screen bg-px-base text-px-text flex items-center justify-center">
       <div className="arena-panel arena-panel-yellow flex flex-col items-center gap-8 text-center px-8 py-8">
         <p style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 12, color: '#ffd166' }}>
-          LADDER MATCH
+          RANKED MATCH
         </p>
         <div style={{ padding: '24px 48px', background: '#141726', border: '2px solid #ffd16644' }}>
           <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#8892b8', minWidth: 220 }}>
@@ -62,6 +62,18 @@ function SearchingScreen({ status, onCancel, isSearching }: { status: string; on
   )
 }
 
+function OpponentFoundScreen({ username }: { username: string }) {
+  return (
+    <div className="arena-page arena-stage arena-center-state min-h-screen bg-px-base text-px-text flex items-center justify-center">
+      <div className="arena-panel arena-panel-yellow flex flex-col items-center gap-5 text-center px-8 py-8">
+        <p style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 12, color: '#38d9a9' }}>OPPONENT FOUND</p>
+        <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#8892b8' }}>PREPARE FOR A RANKED MATCH AGAINST</p>
+        <p style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 14, color: '#ffd166' }}>{username}</p>
+      </div>
+    </div>
+  )
+}
+
 function ErrorScreen({ message, onReset }: { message: string; onReset: () => void }) {
   return (
     <div className="arena-page arena-stage arena-center-state min-h-screen bg-px-base text-px-text flex items-center justify-center">
@@ -87,10 +99,12 @@ export function LadderPage() {
   const errorMsg       = usePvpStore(s => s.errorMsg)
   const opponentReady  = usePvpStore(s => s.opponentReady)
   const opponentUsername = usePvpStore(s => s.opponentUsername)
+  const opponentFoundAt = usePvpStore(s => s.opponentFoundAt)
   const battleState    = usePvpStore(s => s.battleState)
   const { cancelSearch, submitTeam, reset } = usePvpStore()
 
   const [teamSubmitted, setTeamSubmitted] = useState(false)
+  const [showOpponentFound, setShowOpponentFound] = useState(false)
 
   // Reset → connect → findMatch (findMatch waits for TCP handshake internally)
   useEffect(() => {
@@ -103,6 +117,13 @@ export function LadderPage() {
     return () => clearTimeout(t)
   }, [])
 
+  useEffect(() => {
+    if (!opponentFoundAt) return
+    setShowOpponentFound(true)
+    const timeout = setTimeout(() => setShowOpponentFound(false), 1800)
+    return () => clearTimeout(timeout)
+  }, [opponentFoundAt])
+
   function handleReset() { reset(); navigate('/battle') }
 
   if (pvpPhase === 'error')
@@ -110,6 +131,9 @@ export function LadderPage() {
 
   if (pvpPhase === 'battle' || pvpPhase === 'game_over')
     return battleState ? <PvpBattleArena onReset={handleReset} isLadder /> : null
+
+  if (pvpPhase === 'team_select' && showOpponentFound)
+    return <OpponentFoundScreen username={opponentUsername ?? 'OPPONENT'} />
 
   if (pvpPhase === 'team_select') {
     if (teamSubmitted) {
@@ -130,10 +154,10 @@ export function LadderPage() {
       <div>
         <div style={{ background: '#0f1120', borderBottom: '2px solid #ffd16644', padding: '8px 16px' }}>
           <p style={{ fontFamily: 'monospace', fontSize: 9, color: '#ffd166', textAlign: 'center' }}>
-            ⚔ LADDER MATCH — SELECT YOUR TEAM
+            ⚔ RANKED MATCH — SELECT YOUR TEAM
           </p>
         </div>
-        <TeamSelect autoSubmitSecs={45} subtitle={`Ladder Match · VS ${opponentUsername ?? 'Opponent'}`}
+        <TeamSelect autoSubmitSecs={45} subtitle={`Ranked Match · VS ${opponentUsername ?? 'Opponent'}`}
                     onStart={(team: Character[]) => { submitTeam(team); setTeamSubmitted(true) }} />
       </div>
     )

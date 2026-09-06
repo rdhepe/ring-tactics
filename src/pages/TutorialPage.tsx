@@ -19,7 +19,7 @@ const STEPS: Step[] = [
     body: [
       'VS AI — fight a computer-controlled team, great for practice.',
       'VS Player — create a private room and share the code with a friend.',
-      'Ladder — get auto-matched against a random online player and climb the rank ladder.',
+      'Ranked Match — get auto-matched against a random online player and climb the rank ladder.',
     ],
   },
   {
@@ -30,7 +30,7 @@ const STEPS: Step[] = [
       'Then your opponent (AI or player) queues their moves and submits.',
       'Turns resolve sequentially, one full side at a time — not simultaneously.',
       'After both sides act, active effects tick down, cooldowns decrease, and each side gains energy for the next round.',
-      'Ladder and Private Room matches have a 60-second timer per turn — plan quickly!',
+      'Ranked and Private Room matches have a 60-second timer per turn — plan quickly!',
     ],
   },
   {
@@ -74,7 +74,7 @@ const STEPS: Step[] = [
     title: 'Winning & Losing',
     body: [
       'The match ends the moment one team has no wrestlers left standing.',
-      'Ranked Ladder wins earn coins and XP; every completed match (win or loss) earns XP toward your rank, from Green Horn all the way up to Legend.',
+      'Ranked Match wins earn coins and XP; every completed match (win or loss) earns XP toward your rank, from Green Horn all the way up to Legend.',
     ],
   },
   {

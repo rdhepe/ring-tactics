@@ -47,6 +47,7 @@ interface PvpStore {
   battleState: BattleState | null
   opponentReady: boolean
   opponentUsername: string | null
+  opponentFoundAt: number | null
   myTurn: boolean          // true = it's this player's turn to queue + submit
   opponentActing: boolean  // true = waiting for opponent to finish their turn
   timeLeft: number
@@ -73,6 +74,7 @@ export const usePvpStore = create<PvpStore>((set, get) => ({
   battleState: null,
   opponentReady: false,
   opponentUsername: null,
+  opponentFoundAt: null,
   myTurn: false,
   opponentActing: false,
   timeLeft: 60,
@@ -119,7 +121,7 @@ export const usePvpStore = create<PvpStore>((set, get) => ({
     // Ladder matchmaking
     socket.on('searching',   () => set({ pvpPhase: 'searching' }))
     socket.on('match_found', ({ code, slot, opponentUsername }: { code: string; slot: 'p1'|'p2'; opponentUsername?: string }) =>
-      set({ roomCode: code, mySlot: slot, pvpPhase: 'team_select', opponentUsername: opponentUsername ?? null }))
+      set({ roomCode: code, mySlot: slot, pvpPhase: 'team_select', opponentUsername: opponentUsername ?? null, opponentFoundAt: Date.now() }))
 
     // Sequential turn events
     socket.on('your_turn',     ({ timeLeft }: { timeLeft: number }) =>
@@ -173,7 +175,7 @@ export const usePvpStore = create<PvpStore>((set, get) => ({
       socket: null, roomCode: null, mySlot: null,
       pvpPhase: 'idle', errorMsg: null, battleState: null,
       opponentReady: false, myTurn: false, opponentActing: false,
-      opponentUsername: null, timeLeft: 60,
+      opponentUsername: null, opponentFoundAt: null, timeLeft: 60,
     })
   },
 }))
