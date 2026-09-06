@@ -48,7 +48,7 @@ export const ironmaiden: Character = {
     {
       id: 'ironmaiden_s3',
       name: 'Lockdown',
-      description: "Traps the opponent in a technical hold. The target takes 15 less damage and cannot change their queued target for their next turn.",
+      description: 'Traps the opponent in a technical hold, stunning them for their next turn.',
       iconColor: 'bg-stone-700',
       iconUrl: lockdownImg,
       cost: { strength: 1, random: 1 },
@@ -56,10 +56,7 @@ export const ironmaiden: Character = {
       targetType: 'enemy',
       mainClass: 'physical',
       persistence: 'action',
-      effects: [
-        { type: 'damage_reduction', value: 15, duration: 2 },
-        { type: 'target_lock', value: 1, duration: 1 },
-      ],
+      effects: [{ type: 'stun', value: 1, duration: 1 }],
     },
     {
       id: 'ironmaiden_s4',
