@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ALL_CHARACTERS } from '../../data/characters'
 import { CharacterCard } from '../characters/CharacterCard'
 import { CharacterDetail } from '../characters/CharacterDetail'
-import { FREE_RARITIES } from '../../data/economy'
+import { isCharacterAvailable } from '../../data/economy'
 import { useRankStore } from '../../store/rankStore'
 import type { Character } from '../../types'
 
@@ -39,7 +39,7 @@ export function TeamSelect({ onStart, onBack, autoSubmitSecs, subtitle = 'Match 
     function autoPickAndSubmit() {
       if (autoSubmitted) return
       autoSubmitted = true
-      const isAvailable = (c: Character) => FREE_RARITIES.includes(c.rarity) || unlockedRef.current.includes(c.id)
+      const isAvailable = (c: Character) => isCharacterAvailable(c.id, c.rarity, unlockedRef.current)
       const filled = [...teamRef.current]
       for (const c of ALL_CHARACTERS) {
         if (filled.length >= MAX_TEAM) break
@@ -64,7 +64,7 @@ export function TeamSelect({ onStart, onBack, autoSubmitSecs, subtitle = 'Match 
   }, [autoSubmitSecs])
 
   function toggleChar(c: Character) {
-    const isLocked = !FREE_RARITIES.includes(c.rarity) && !unlockedCharacters.includes(c.id)
+    const isLocked = !isCharacterAvailable(c.id, c.rarity, unlockedCharacters)
     if (isLocked) return
     setTeam(prev => {
       if (prev.find(x => x.id === c.id)) return prev.filter(x => x.id !== c.id)

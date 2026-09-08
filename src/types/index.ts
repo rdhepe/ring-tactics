@@ -50,6 +50,8 @@ export type EffectType =
   | 'conditional_used_skill_this_round'
   | 'skill_cancel'
   | 'interference'
+  | 'tag_switch'
+  | 'defense_break'
 
 export type TargetType = 'enemy' | 'ally' | 'self' | 'all_enemies' | 'all_allies' | 'any'
 
@@ -153,6 +155,7 @@ export interface Character {
   rarity: CharacterRarity
   classes: CharacterClass[]
   maxHp: number              // default 100
+  combatModeNames?: { precision: string; chaos: string }
   skills: [Skill, Skill, Skill, Skill]  // exactly 4 skills
   /** optional unlock requirement text */
   unlockHint?: string

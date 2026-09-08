@@ -11,6 +11,7 @@ import { echo } from './echo'
 import { breakpoint } from './breakpoint'
 import { velvetvow } from './velvetvow'
 import { blackout } from './blackout'
+import { doubledown } from './doubledown'
 
 /** Add a new wrestler here — nothing else needs to change. */
 export const ALL_CHARACTERS: Character[] = [
@@ -26,6 +27,7 @@ export const ALL_CHARACTERS: Character[] = [
   echo,
   themind,
   velvetvow,
+  doubledown,
 ]
 
 export const CHARACTER_MAP: Record<string, Character> = Object.fromEntries(

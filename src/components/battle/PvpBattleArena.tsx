@@ -390,6 +390,7 @@ export function PvpBattleArena({ onReset, isLadder = false }: { onReset: () => v
             }}
             onAIClick={() => pendingSkill && tryQueue(pendingSkill.charIdx, pendingSkill.skillId, 'ai', slot)}
             onSkillClick={handleSkillClick}
+            onTagClick={switchMode}
             onSkillHover={() => {}}
             onRemoveQueued={casterIdx => dequeueLocal(casterIdx)}
           />

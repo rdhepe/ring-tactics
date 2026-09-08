@@ -79,7 +79,7 @@ export default function App() {
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/battle" element={<RequireAuth requireVerified><BattlePage /></RequireAuth>} />
+            <Route path="/battle" element={<BattlePage />} />
             <Route path="/pvp"    element={<RequireAuth requireVerified><PvpLobbyPage /></RequireAuth>} />
             <Route path="/ladder" element={<RequireAuth requireVerified><LadderPage /></RequireAuth>} />
             <Route path="/store" element={<DiamondStorePage />} />

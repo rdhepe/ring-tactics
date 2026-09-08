@@ -10,6 +10,7 @@ import { getEffectiveSkill, isInvulnerable, isStunned, spendEnergy } from '../..
 import { EnergyAllocModal } from './EnergyAllocModal'
 import { BattleField } from './BattleField'
 import { BattleLogModal } from './TurnLog'
+import type { GuestMatchProgress } from '../../store/guestTrialStore'
 
 const E_KEYS = ['strength', 'magic', 'spirit', 'agility'] as const
 
@@ -260,7 +261,12 @@ function extractLastTurnLog(log: string[]): { playerLines: string[]; aiLines: st
 
 // ─── Main arena ───────────────────────────────────────────────────────────────
 
-export function BattleArena() {
+interface BattleArenaProps {
+  onMatchComplete?: (progress: GuestMatchProgress) => void
+  afterMatchContent?: React.ReactNode
+}
+
+export function BattleArena({ onMatchComplete, afterMatchContent }: BattleArenaProps = {}) {
   const { battleState: state, selectedCharIdx, pendingSkill,
     selectChar, setPendingSkill, queueSkill, dequeueSkill, switchMode, endTurn, reset,
   } = useBattleStore()
@@ -285,6 +291,13 @@ export function BattleArena() {
     xpAwardedRef.current = true
     const result = state.phase === 'victory' ? 'win' : 'loss'
     const survivingAllies = state.player.characters.filter(c => !c.isDead).length
+    onMatchComplete?.({
+      result,
+      turns: state.turn,
+      survivingAllies,
+      playerCharacterIds: state.player.characters.map(character => character.character.id),
+      opponentCharacterIds: state.ai.characters.map(character => character.character.id),
+    })
     if (username) recordMissionMatch(
       username,
       result,
@@ -471,6 +484,12 @@ export function BattleArena() {
         onReset={reset}
       />
 
+      {afterMatchContent && isOver && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,.72)' }}>
+          {afterMatchContent}
+        </div>
+      )}
+
       {/* targeting banner — always rendered at fixed height to prevent layout shift */}
       <div className="flex items-center justify-between px-4 shrink-0"
            style={{
@@ -519,6 +538,7 @@ export function BattleArena() {
             }}
             onAIClick={() => pendingSkill && tryQueue(pendingSkill.charIdx, pendingSkill.skillId, 'ai', slot)}
             onSkillClick={handleSkillClick}
+            onTagClick={switchMode}
             onSkillHover={() => {}}
             onRemoveQueued={casterIdx => dequeueSkill(casterIdx)}
           />

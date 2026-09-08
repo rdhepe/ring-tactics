@@ -24,4 +24,5 @@ export const CHARACTER_RARITY: Record<string, CharacterRarity> = {
   lyra:        'uncommon',
   vex:         'common',
   zara:        'rare',
+  doubledown:  'legendary',
 }

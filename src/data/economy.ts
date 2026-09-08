@@ -12,6 +12,15 @@ export const UNLOCK_COST: Record<CharacterRarity, { coins: number | null; diamon
 /** Rarities unlocked for free from the start of the game. */
 export const FREE_RARITIES: CharacterRarity[] = ['common']
 
+/** Wrestlers granted to every player regardless of rarity. */
+export const DEFAULT_UNLOCKED_CHARACTER_IDS = ['doubledown']
+
+export function isCharacterAvailable(id: string, rarity: CharacterRarity, unlockedCharacters: string[]) {
+  return FREE_RARITIES.includes(rarity)
+    || DEFAULT_UNLOCKED_CHARACTER_IDS.includes(id)
+    || unlockedCharacters.includes(id)
+}
+
 /** Coins awarded for winning a ladder match (credited server-side only). */
 export const COINS_PER_LADDER_WIN = 50
 

@@ -4,7 +4,7 @@ import { getRarityColor } from '../ui/RarityBadge'
 import { SkillCard } from '../ui/SkillCard'
 import { EnergyCostDisplay } from '../ui/EnergyOrb'
 import { HPBar } from '../ui/HPBar'
-import { UNLOCK_COST, FREE_RARITIES } from '../../data/economy'
+import { UNLOCK_COST, isCharacterAvailable } from '../../data/economy'
 import { useRankStore } from '../../store/rankStore'
 
 interface CharacterDetailProps {
@@ -90,7 +90,7 @@ export function CharacterDetail({ character, onSelect, selected, selectLabel = '
   const active = character.skills[activeIdx]
   const rc = getRarityColor(character.rarity)
   const unlockedCharacters = useRankStore(s => s.unlockedCharacters)
-  const isLocked = !FREE_RARITIES.includes(character.rarity) && !unlockedCharacters.includes(character.id)
+  const isLocked = !isCharacterAvailable(character.id, character.rarity, unlockedCharacters)
 
   return (
     <div className="arena-detail flex flex-col gap-0">

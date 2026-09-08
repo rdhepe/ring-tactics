@@ -14,10 +14,10 @@ const LOG_MAX = 80
 
 function makeBattleChar(character: Character): BattleCharacter {
   const modeToggle = character.skills.find(skill => skill.modeToggle)
-  const activeEffects: ActiveEffect[] = modeToggle
+  const activeEffects: ActiveEffect[] = modeToggle || character.combatModeNames
     ? [{
         key: 'precision_mode_default',
-        sourceSkillId: modeToggle.id,
+        sourceSkillId: modeToggle?.id ?? character.skills[0].id,
         sourceCharacterId: character.id,
         effect: { type: 'precision_mode', value: 1, duration: 9999 },
         turnsLeft: 9999,
@@ -25,6 +25,21 @@ function makeBattleChar(character: Character): BattleCharacter {
       }]
     : []
   return { character, hp: character.maxHp, maxHp: character.maxHp, cooldowns: {}, activeEffects, isDead: false, skillUseCounts: {}, skillLastUsedTurn: {} }
+}
+
+function toggleCombatMode(char: BattleCharacter): CombatMode {
+  const nextMode: CombatMode = getCombatMode(char) === 'precision' ? 'chaos' : 'precision'
+  char.activeEffects = char.activeEffects.filter(ae => ae.effect.type !== 'precision_mode' && ae.effect.type !== 'chaos_mode')
+  const toggleSkill = char.character.skills.find(skill => skill.modeToggle)
+  char.activeEffects.push({
+    key: `${nextMode}_mode_${toggleSkill?.id ?? 'toggle'}` as ActiveEffect['key'],
+    sourceSkillId: toggleSkill?.id ?? 'mode_toggle',
+    sourceCharacterId: char.character.id,
+    effect: { type: nextMode === 'precision' ? 'precision_mode' : 'chaos_mode', value: 1, duration: 9999 },
+    turnsLeft: 9999,
+    stacks: 1,
+  })
+  return nextMode
 }
 
 function makeTeam(id: TeamId, characters: Character[]): BattleTeam {
@@ -134,25 +149,18 @@ export function switchCombatMode(state: BattleState, teamId: TeamId, charIndex: 
   const team = teamId === 'player' ? next.player : next.ai
   const char = team.characters[charIndex]
   const toggleSkill = char?.character.skills.find(skill => skill.modeToggle)
-  if (!char || char.isDead || !toggleSkill || isStunned(char)) return next
-  if (char.skillLastUsedTurn[toggleSkill.id] === next.turn) return next
+  if (!char || char.isDead || (!toggleSkill && !char.character.combatModeNames) || isStunned(char)) return next
+  if (toggleSkill && char.skillLastUsedTurn[toggleSkill.id] === next.turn) return next
 
-  const current = getCombatMode(char)
-  const nextMode: CombatMode = current === 'precision' ? 'chaos' : 'precision'
-  char.activeEffects = char.activeEffects.filter(ae => ae.effect.type !== 'precision_mode' && ae.effect.type !== 'chaos_mode')
-  char.activeEffects.push({
-    key: `${nextMode}_mode_${toggleSkill.id}` as ActiveEffect['key'],
-    sourceSkillId: toggleSkill.id,
-    sourceCharacterId: char.character.id,
-    effect: { type: nextMode === 'precision' ? 'precision_mode' : 'chaos_mode', value: 1, duration: 9999 },
-    turnsLeft: 9999,
-    stacks: 1,
-  })
-  char.skillLastUsedTurn[toggleSkill.id] = next.turn
-  char.cooldowns[toggleSkill.id] = 1
+  const nextMode = toggleCombatMode(char)
+  if (toggleSkill) {
+    char.skillLastUsedTurn[toggleSkill.id] = next.turn
+    char.cooldowns[toggleSkill.id] = 1
+  }
   next.playerQueue = next.playerQueue.filter(q => !(teamId === 'player' && q.characterIndex === charIndex))
   next.aiQueue = next.aiQueue.filter(q => !(teamId === 'ai' && q.characterIndex === charIndex))
-  next.log = [...next.log, `${char.character.name} switches to ${nextMode === 'precision' ? 'Precision' : 'Chaos'} Mode.`].slice(-LOG_MAX)
+  const modeName = char.character.combatModeNames?.[nextMode] ?? (nextMode === 'precision' ? 'Precision' : 'Chaos')
+  next.log = [...next.log, `${char.character.name} switches to ${modeName}.`].slice(-LOG_MAX)
   return next
 }
 
@@ -279,9 +287,12 @@ function applyDmg(
   if (dtype === 'normal') dmg = Math.max(0, dmg - getDR(char))
   // pierce ignores DR but both go through destructible defense
   const ddList = char.activeEffects.filter(ae => ae.effect.type === 'destructible_defense')
+  let defenseBreak = char.activeEffects
+    .filter(ae => ae.effect.type === 'defense_break')
+    .reduce((sum, ae) => sum + ae.effect.value, 0)
   for (const ae of ddList) {
     if (dmg <= 0) break
-    const absorbed = Math.min(ae.effect.value, dmg)
+    const absorbed = Math.min(Math.max(0, ae.effect.value - defenseBreak), dmg)
     ae.effect.value -= absorbed
     dmg -= absorbed
   }
@@ -294,7 +305,7 @@ function applyDmg(
 // ─── Effect application ───────────────────────────────────────────────────────
 
 // passive status effect types — listed here so addActiveEffect can reference them
-const PASSIVE_TYPES = new Set(['stun', 'invulnerable', 'damage_reduction', 'destructible_defense', 'damage_boost', 'damage_mark', 'counter_guard', 'damage_penalty', 'target_lock', 'attacked_target', 'setup_mode', 'skill_mark', 'precision_mode', 'chaos_mode', 'damaged_this_round', 'domino_mark', 'heal_on_damage', 'death_prevention', 'next_damage_boost', 'play_dead_mark', 'skill_cancel', 'interference'])
+const PASSIVE_TYPES = new Set(['stun', 'invulnerable', 'damage_reduction', 'destructible_defense', 'damage_boost', 'damage_mark', 'counter_guard', 'damage_penalty', 'target_lock', 'attacked_target', 'setup_mode', 'skill_mark', 'precision_mode', 'chaos_mode', 'damaged_this_round', 'domino_mark', 'heal_on_damage', 'death_prevention', 'next_damage_boost', 'play_dead_mark', 'skill_cancel', 'interference', 'defense_break'])
 
 function addActiveEffect(char: BattleCharacter, skillId: string, charId: string, effect: SkillEffect, sourceTeamId?: TeamId): void {
   const key = `${effect.type}_${skillId}` as ActiveEffect['key']
@@ -483,6 +494,12 @@ function applyInstant(
       for (let i = 0; i < effect.value; i++) actorTeam.energy[randEnergyType()]++
       log.push(`${aName} gains ${effect.value} energy`)
       break
+    case 'tag_switch': {
+      const nextMode = toggleCombatMode(actor)
+      const modeName = actor.character.combatModeNames?.[nextMode] ?? (nextMode === 'precision' ? 'Precision' : 'Chaos')
+      log.push(`${aName} tags in ${modeName}.`)
+      break
+    }
     case 'energy_drain': {
       const MAX_PER_TYPE = 3
       let left = effect.value, drained = 0
@@ -527,7 +544,7 @@ function resolveTargets(
 // ─── Skill execution ──────────────────────────────────────────────────────────
 
 // immediate effect types for instant skills
-const INSTANT_TYPES = new Set(['damage', 'pierce_damage', 'affliction', 'conditional_damage', 'conditional_damaged_this_round', 'conditional_used_skill_this_round', 'conditional_heal_below_half', 'marked_bonus_damage', 'consume_mark', 'consume_mark_stun', 'consume_setup', 'self_damage', 'heal', 'energy_gain', 'energy_drain'])
+const INSTANT_TYPES = new Set(['damage', 'pierce_damage', 'affliction', 'conditional_damage', 'conditional_damaged_this_round', 'conditional_used_skill_this_round', 'conditional_heal_below_half', 'marked_bonus_damage', 'consume_mark', 'consume_mark_stun', 'consume_setup', 'self_damage', 'heal', 'energy_gain', 'energy_drain', 'tag_switch'])
 
 export function executeQueuedSkill(state: BattleState, queued: QueuedSkill, actorTeamId: TeamId, log: string[]): void {
   const actorTeam = actorTeamId === 'player' ? state.player : state.ai

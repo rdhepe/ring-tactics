@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore, API } from '../store/authStore'
+import { useGuestTrialStore } from '../store/guestTrialStore'
+import { useMissionStore } from '../store/missionStore'
 
 type Mode = 'login' | 'register'
 
@@ -8,8 +10,12 @@ export function LoginPage() {
   const navigate  = useNavigate()
   const location  = useLocation()
   const { login } = useAuthStore()
+  const pendingGuestProgress = useGuestTrialStore(s => s.pendingProgress)
+  const clearPendingGuestProgress = useGuestTrialStore(s => s.clearPendingProgress)
+  const recordMissionMatch = useMissionStore(s => s.recordMatch)
 
-  const [mode, setMode]         = useState<Mode>('login')
+  const initialMode = (location.state as { mode?: Mode } | null)?.mode === 'register' ? 'register' : 'login'
+  const [mode, setMode]         = useState<Mode>(initialMode)
   const [username, setUsername] = useState('')
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
@@ -37,6 +43,17 @@ export function LoginPage() {
       const data = await res.json() as { username?: string; email?: string | null; emailVerified?: boolean; error?: string }
       if (!res.ok) { setError(data.error ?? 'Something went wrong.'); return }
       login(data.username!, data.email ?? null, data.emailVerified ?? false)
+      if (pendingGuestProgress) {
+        recordMissionMatch(
+          data.username!,
+          pendingGuestProgress.result,
+          pendingGuestProgress.turns,
+          pendingGuestProgress.survivingAllies,
+          pendingGuestProgress.playerCharacterIds,
+          pendingGuestProgress.opponentCharacterIds,
+        )
+        clearPendingGuestProgress()
+      }
       if (mode === 'register') { setRegistered(true); return }
       navigate(returnTo, { replace: true })
     } catch {

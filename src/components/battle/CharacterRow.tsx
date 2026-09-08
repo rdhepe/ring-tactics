@@ -11,6 +11,7 @@ const EFFECT_BADGE: Record<string, { icon: string; color: string }> = {
   invulnerable:        { icon: '🛡', color: '#38d9a9' },
   damage_reduction:    { icon: '🔰', color: '#6b9ff5' },
   destructible_defense:{ icon: '🧱', color: '#8892b8' },
+  defense_break:       { icon: '⬇', color: '#f45e3f' },
   damage_boost:        { icon: '🔥', color: '#f45e3f' },
   next_damage_boost:   { icon: '↑', color: '#f45e3f' },
   damage_penalty:      { icon: '↓', color: '#8892b8' },
@@ -334,6 +335,7 @@ const EFFECT_LABEL: Record<string, string> = {
   invulnerable:        'Invulnerable',
   damage_reduction:    'Damage Reduction',
   destructible_defense:'Destructible Shield',
+  defense_break:       'Defense Break',
   damage_boost:        'Damage Boost',
   next_damage_boost:   'Next Attack Boost',
   damage_penalty:      'Next Attack Penalty',
@@ -423,6 +425,7 @@ function CastSkillBadge({ skillId, charId, effects, index, markCount, side }: {
               const turns = Math.max(0, ae.turnsLeft - 1)
               const valueStr = ae.effect.type === 'damage_reduction'    ? `Reduces damage by ${ae.effect.value}`
                              : ae.effect.type === 'destructible_defense' ? `Shield: ${ae.effect.value} remaining`
+                             : ae.effect.type === 'defense_break'        ? `Destructible defense reduced by ${ae.effect.value}`
                              : ae.effect.type === 'damage_boost'        ? `+${ae.effect.value} to all attacks`
                              : ae.effect.type === 'next_damage_boost'   ? `+${ae.effect.value} on the next damaging attack`
                              : ae.effect.type === 'damage_penalty'      ? `-${ae.effect.value} on the next damaging attack`
@@ -704,6 +707,7 @@ interface CharacterRowProps {
   onPlayerClick:       () => void
   onAIClick:           () => void
   onSkillClick:        (skillId: string, slot: number) => void
+  onTagClick?:         (slot: number) => void
   onSkillHover:        (skill: Skill | null) => void
   onRemoveQueued:      (casterIdx: number) => void
 }
@@ -713,7 +717,7 @@ export function CharacterRow({
   playerSelected, aiTargeted, playerTargeted,
   queuedSkillId, pendingSkillId, playerEnergy,
   isPlayerTurn, incomingQueued, playerIncomingQueued, currentTurn,
-  onPlayerClick, onAIClick, onSkillClick, onSkillHover, onRemoveQueued,
+  onPlayerClick, onAIClick, onSkillClick, onTagClick, onSkillHover, onRemoveQueued,
 }: CharacterRowProps) {
   const rowBg = playerSelected
     ? 'rgba(255,209,102,.04)'
@@ -737,6 +741,15 @@ export function CharacterRow({
           onRemoveQueued={onRemoveQueued}
           onClick={onPlayerClick}
         />
+        {playerChar.character.combatModeNames && (
+          <button type="button" onClick={() => onTagClick?.(slot)}
+                  disabled={!isPlayerTurn || playerChar.isDead || isStunned(playerChar)}
+                  title="Tag Brutus and Vex"
+                  style={{ padding: '5px 7px', background: '#1d2235', border: '1px solid #ffd16666', color: '#ffd166',
+                           fontFamily: 'monospace', fontSize: 8, fontWeight: 'bold', cursor: isPlayerTurn ? 'pointer' : 'not-allowed', opacity: isPlayerTurn ? 1 : .45 }}>
+            TAG
+          </button>
+        )}
         <div className="flex gap-1.5 ml-2">
           {playerChar.character.skills.map(baseSkill => {
             const skill = getEffectiveSkill(playerChar, baseSkill)

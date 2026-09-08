@@ -1,6 +1,6 @@
 import type { Character } from '../../types'
 import { getRarityColor } from '../ui/RarityBadge'
-import { UNLOCK_COST, FREE_RARITIES } from '../../data/economy'
+import { UNLOCK_COST, isCharacterAvailable } from '../../data/economy'
 import { useRankStore } from '../../store/rankStore'
 
 interface CharacterCardProps {
@@ -12,7 +12,7 @@ interface CharacterCardProps {
 export function CharacterCard({ character, selected, onClick }: CharacterCardProps) {
   const rc = getRarityColor(character.rarity)
   const unlockedCharacters = useRankStore(s => s.unlockedCharacters)
-  const isLocked = !FREE_RARITIES.includes(character.rarity) && !unlockedCharacters.includes(character.id)
+  const isLocked = !isCharacterAvailable(character.id, character.rarity, unlockedCharacters)
   const cost = UNLOCK_COST[character.rarity]
 
   return (
