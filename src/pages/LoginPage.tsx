@@ -6,6 +6,8 @@ import { useMissionStore } from '../store/missionStore'
 
 type Mode = 'login' | 'register'
 
+const ACCOUNT_BENEFITS = ['Save progress', 'Earn coins', 'Unlock wrestlers', 'Climb the card'] as const
+
 export function LoginPage() {
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -116,6 +118,19 @@ export function LoginPage() {
                 {m}
               </button>
             ))}
+          </div>
+
+          <div className="px-6 pt-5 pb-1">
+            <p style={{ fontFamily: 'monospace', fontSize: 10, color: '#ffd166', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.2 }}>
+              Your account keeps the climb
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+              {ACCOUNT_BENEFITS.map(benefit => (
+                <span key={benefit} style={{ fontFamily: 'monospace', fontSize: 10, color: '#c8cfe8', background: '#0c0e1a', border: '1px solid #2e3755', padding: '6px 8px' }}>
+                  {benefit}
+                </span>
+              ))}
+            </div>
           </div>
 
           <form onSubmit={submit} className="flex flex-col gap-4 p-6">

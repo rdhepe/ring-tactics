@@ -18,6 +18,8 @@ const FORMAT = [
   ['4', 'Energy disciplines'], ['1', 'Stable left standing'],
 ] as const
 
+const ACCOUNT_BENEFITS = ['Save progress', 'Earn coins', 'Unlock wrestlers', 'Climb the card'] as const
+
 export function HomePage() {
   const rosterRef = useRef<HTMLDivElement>(null)
 
@@ -39,6 +41,9 @@ export function HomePage() {
             <Link to="/battle" className="event-button event-button-primary">Enter The Ring</Link>
             <Link to="/characters" className="event-button event-button-outline">View Fight Card</Link>
           </div>
+          <ul className="event-account-benefits" aria-label="Account benefits">
+            {ACCOUNT_BENEFITS.map(benefit => <li key={benefit}>{benefit}</li>)}
+          </ul>
         </div>
         <div className="event-rounds" aria-hidden="true"><span>01</span><i /><span>02</span><i /><span>03</span></div>
       </section>

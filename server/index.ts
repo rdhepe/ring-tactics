@@ -61,7 +61,7 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const LAUNCH_LIVE = process.env.LAUNCH_LIVE === 'true'
 // API route prefixes that are gated while in pre-launch mode. Static asset/SPA serving is untouched
 // so the frontend can still load and show the Coming Soon / Pre-Register / Tutorial pages.
-const GATED_API_PREFIXES = ['/auth', '/profile', '/payments', '/economy', '/stats', '/leaderboards']
+const GATED_API_PREFIXES = ['/api', '/auth', '/profile', '/payments', '/economy', '/stats']
 const PRELAUNCH_ALLOWED_PATHS = ['/health', '/config', '/pre-register']
 const razorpayKeyId = process.env.RAZORPAY_KEY_ID
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
@@ -76,6 +76,10 @@ const allowedOrigins = (process.env.APP_ORIGIN ?? `http://localhost:5173,http://
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean)
+const frameAncestors = ["'self'", ...(process.env.FRAME_ANCESTORS ?? '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean)]
 // The origin used to build links inside emails (verification, etc.) — the first configured app origin.
 const primaryAppOrigin = allowedOrigins[0] ?? 'http://localhost:5173'
 
@@ -536,6 +540,7 @@ const io = new Server(http, {
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
 app.use(helmet({
+  frameguard: false,
   // Default CSP blocks 'self'-only script/frame/connect sources; Razorpay Checkout
   // needs its script, iframe, and XHR/websocket endpoints allow-listed explicitly.
   contentSecurityPolicy: {
@@ -543,6 +548,7 @@ app.use(helmet({
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
       'script-src': ["'self'", "'unsafe-inline'", 'https://checkout.razorpay.com'],
       'frame-src': ["'self'", 'https://checkout.razorpay.com', 'https://api.razorpay.com'],
+      'frame-ancestors': frameAncestors,
       'connect-src': ["'self'", 'https://checkout.razorpay.com', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
       'img-src': ["'self'", 'data:', 'https://*.razorpay.com'],
     },
@@ -848,7 +854,7 @@ app.post('/payments/verify', paymentLimiter, async (req, res) => {
 })
 
 
-app.get('/leaderboards', async (_req, res) => {
+async function sendLeaderboards(_req: express.Request, res: express.Response) {
   const eligible = await getLeaderboardStats()
   const byUsername = (a: PlayerStats, b: PlayerStats) => a.username.localeCompare(b.username)
   const top = (compare: (a: PlayerStats, b: PlayerStats) => number) =>
@@ -860,6 +866,13 @@ app.get('/leaderboards', async (_req, res) => {
     matchesPlayed: top((a, b) => b.matchesPlayed - a.matchesPlayed || b.wins - a.wins),
     leastLosses: top((a, b) => a.losses - b.losses || b.wins - a.wins || b.matchesPlayed - a.matchesPlayed),
   })
+}
+
+app.get('/api/leaderboards', sendLeaderboards)
+
+app.get('/leaderboards', (req, res, next) => {
+  if (req.accepts('html')) { next(); return }
+  void sendLeaderboards(req, res)
 })
 
 app.get('/health', async (_req, res) => {

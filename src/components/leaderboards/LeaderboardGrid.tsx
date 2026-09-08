@@ -37,7 +37,7 @@ export function LeaderboardGrid({ limit }: { limit: 3 | 10 }) {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch(`${API}/leaderboards`, { signal: controller.signal })
+    fetch(`${API}/api/leaderboards`, { signal: controller.signal })
       .then(response => {
         if (!response.ok) throw new Error('Leaderboard request failed')
         return response.json() as Promise<LeaderboardData>
